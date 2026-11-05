@@ -27,7 +27,7 @@ wheels/
 *.bin
 *.safetensors
 data/raw/cache/
-outputs/
+# outputs/ tracked for reproducibility
 reports/
 
 # IDE / OS
