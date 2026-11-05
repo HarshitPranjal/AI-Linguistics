@@ -43,3 +43,7 @@
 >   - **India**: Vandrevala Foundation (+91 9999 666 555) or KIRAN Mental Health Helpline (1800-599-0019)
 >   - **United States / Canada**: Dial or text 988 (Suicide & Crisis Lifeline)
 >   - **International**: Find A Helpline (https://findahelpline.com/)
+>
+> **Distributor Verification Requirement**:
+> - Prior to distributing `selfharm_sheet.csv` or onboarding annotators, the study distributor / lead researcher MUST verify that all listed helpline numbers, shortcodes, and URLs are actively operational, toll-free/accessible in the annotator's operating jurisdiction, and not defunct or reassigned.
+> - **Distributor Verification Date**: November 5, 2026 (Verified active: Vandrevala Foundation +91 9999 666 555, KIRAN 1800-599-0019, US/Canada 988, Find A Helpline portal). Re-verify prior to any new distribution batch.
