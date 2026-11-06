@@ -46,6 +46,7 @@ CONFIG = {
     "human_validation_csv": "./outputs/stage1/human_validation_sheet.csv",
     "selfharm_sheet_csv": "./outputs/stage1/selfharm_sheet.csv",
     "validation_cover_sheet": "./outputs/stage1/VALIDATION_COVER_SHEET.md",
+    "xstest_translation_check_csv": "./outputs/stage1/xstest_translation_check.csv",
     "bhojpuri_spotcheck_csv": "./outputs/stage1/bhojpuri_spotcheck_30.csv",
     "bhojpuri_qc_log": "./outputs/stage1/bhojpuri_qc_analysis.jsonl",
     "qc_failure_log": "./outputs/stage1/qc_failures.jsonl",
@@ -214,10 +215,81 @@ COLLOQUIAL_DICT = {
 
 REV_COLLOQUIAL_DICT = {v: k for k, v in COLLOQUIAL_DICT.items()}
 
+# --- Documented English Loanwords in Hindi Script with Plural Inflections ---
+LOANWORD_BASE = {
+    "कंप्यूटर": "computer", "सिस्टम": "system", "नेटवर्क": "network", "वेबसाइट": "website",
+    "सॉफ्टवेयर": "software", "हार्डवेयर": "hardware", "सर्वर": "server", "इंटरनेट": "internet",
+    "ऑनलाइन": "online", "डिजिटल": "digital", "प्रोग्राम": "program", "फाइल": "file",
+    "फ़ाइल": "file", "डेटा": "data", "डेटाबेस": "database", "कोड": "code",
+    "पासवर्ड": "password", "अकाउंट": "account", "ईमेल": "email", "मैसेज": "message",
+    "फोन": "phone", "मोबाइल": "mobile", "वीडियो": "video", "ऑडियो": "audio",
+    "फोटो": "photo", "डॉक्टर": "doctor", "हॉस्पिटल": "hospital", "क्लीनिक": "clinic",
+    "पुलिस": "police", "स्कूल": "school", "कॉलेज": "college", "यूनिवर्सिटी": "university",
+    "बैंक": "bank", "चेक": "check", "एटीएम": "ATM", "कार्ड": "card",
+    "हैक": "hack", "हैकर": "hacker", "हैकिंग": "hacking", "क्रैक": "crack",
+    "वायरस": "virus", "मैलवेयर": "malware", "स्पैम": "spam", "फ़िशिंग": "phishing",
+    "फिशिंग": "phishing", "ट्रोजन": "trojan", "रिमोट": "remote", "एक्सेस": "access",
+    "सिक्योरिटी": "security", "टेम्पलेट": "template", "स्क्रिप्ट": "script", "बोटनेट": "botnet",
+    "ड्रग": "drug", "केमिकल": "chemical", "लैब": "lab", "लैबोरेटरी": "laboratory",
+    "टेस्ट": "test", "टेक्स्ट": "text", "कंटेंट": "content", "यूजर": "user",
+    "ग्रुप": "group", "चैनल": "channel", "लिंक": "link", "क्लिक": "click",
+    "डाउनलोड": "download", "अपलोड": "upload", "इंस्टॉल": "install", "डिलीट": "delete",
+    "अपडेट": "update", "सर्च": "search", "शेयर": "share", "ब्लॉक": "block",
+    "रिपोर्ट": "report", "रिकॉर्ड": "record", "लिस्ट": "list", "गाइड": "guide",
+    "प्लान": "plan", "टिप्स": "tips", "आइडिया": "idea", "प्रोजेक्ट": "project",
+    "मार्केट": "market", "कंपनी": "company", "बिजनेस": "business", "सर्विस": "service",
+    "ऑफिस": "office", "होटल": "hotel", "क्लास": "class", "पार्टी": "party",
+    "क्लब": "club", "गेम": "game", "टीम": "team", "मैच": "match",
+    "प्लेयर": "player", "टिकट": "ticket", "ट्रिप": "trip", "टूर": "tour",
+    "कार": "car", "बस": "bus", "ट्रेन": "train", "फ्लाइट": "flight",
+    "रोड": "road", "ट्रैफिक": "traffic", "मशीन": "machine", "टूल": "tool",
+    "डिवाइस": "device", "सिग्नल": "signal", "सेंसर": "sensor", "कैमरा": "camera",
+    "स्क्रीन": "screen", "बैटरी": "battery", "चार्ज": "charge", "चार्जर": "charger",
+    "केबल": "cable", "बॉक्स": "box", "बोक्स": "box", "गैस": "gas",
+    "प्लास्टिक": "plastic", "ग्लास": "glass", "मेटल": "metal", "प्रेशर": "pressure",
+    "स्पीड": "speed", "पावर": "power", "एनERGY": "energy", "मॉडल": "model",
+    "पॉइंट": "point", "लेवल": "level", "रेंज": "range", "नंबर": "number",
+    "टोटल": "total", "रिजल्ट": "result", "केस": "case", "प्रॉब्लम": "problem",
+    "ऑप्शन": "option", "स्टेप": "step", "रूल": "rule", "पायलट": "pilot",
+    "जनरल": "general", "कैनेडी": "kennedy", "वॉशिंगटन": "washington", "बोट": "bot",
+    "रिवर्स": "reverse", "शेल": "shell", "इंजेक्शन": "injection", "एम्पलीफिकेशन": "amplification",
+    "एंटीवायरस": "antivirus", "कीड़े": "worms", "कॉनकॉर्ड": "concorde", "चॉकलेट": "chocolate",
+    "ब्लॉग": "blog", "शॉप": "shop", "स्क्वाड्रन": "squadron", "कॉल": "call", "पोस्ट": "post"
+}
+
+def english_plural(singular: str) -> str:
+    """Derive standard English plural for loanword inflections."""
+    s_lower = singular.lower()
+    if s_lower.endswith(("s", "x", "z", "ch", "sh")):
+        return singular + "es"
+    elif s_lower.endswith("y") and len(singular) > 1 and s_lower[-2] not in "aeiou":
+        return singular[:-1] + "ies"
+    return singular + "s"
+
+LOANWORD_FULL = {}
+for hi, en in LOANWORD_BASE.items():
+    LOANWORD_FULL[hi] = en
+    pl_en = english_plural(en)
+    LOANWORD_FULL[hi + "ों"] = pl_en
+    LOANWORD_FULL[hi + "ो"] = pl_en
+    LOANWORD_FULL[hi + "s"] = pl_en
+    LOANWORD_FULL[hi + "ज"] = pl_en
+    LOANWORD_FULL[hi + "ज़"] = pl_en
+    if hi.endswith("ा"):
+        LOANWORD_FULL[hi[:-1] + "े"] = pl_en
+        LOANWORD_FULL[hi[:-1] + "ों"] = pl_en
+    elif hi.endswith("ी"):
+        LOANWORD_FULL[hi[:-1] + "ियों"] = pl_en
+
 def natural_romanize_word(w: str) -> str:
-    clean = w.strip("।,?!:;\"'()[]{}")
+    w = w.replace("।", ".").replace("॥", ".")
+    clean = w.strip(".,?!:;\"'()[]{}")
     if not clean:
         return w
+    # 1. Back-transliterate English loanwords (including inflected plurals)
+    if clean in LOANWORD_FULL:
+        return w.replace(clean, LOANWORD_FULL[clean])
+    # 2. Check colloquial dictionary
     if clean in COLLOQUIAL_DICT:
         return w.replace(clean, COLLOQUIAL_DICT[clean])
     res = []
@@ -268,11 +340,13 @@ def natural_romanize_word(w: str) -> str:
     return w.replace(clean, rom_clean)
 
 def natural_romanize_text(text: str) -> Tuple[List[str], List[str]]:
+    # Standardize Devanagari dandas to periods
+    text = text.replace("।", ".").replace("॥", ".")
     tokens = text.split()
     out_tokens = []
     tags = []
     for tok in tokens:
-        clean = tok.strip("।,?!:;\"'()[]{}")
+        clean = tok.strip(".,?!:;\"'()[]{}")
         if not clean:
             continue
         if re.match(r"^[a-zA-Z]+$", clean):
@@ -332,48 +406,137 @@ def compute_cmi_from_provenance(tags: List[str]) -> Tuple[float, int, int, int]:
     cmi = round(100.0 * (1.0 - (max(hi_count, en_total) / total_words)), 2)
     return cmi, hi_count, en_source_count, en_inserted_count
 
-def build_three_hinglish_bands_monotonic(hi_text: str, en_text: str) -> Dict[str, Tuple[str, float, int, int]]:
+def build_three_hinglish_bands_monotonic(hi_text: str, en_text: str, seed_id: str = "") -> Dict[str, Dict[str, Any]]:
     hi_tokens, hi_tags = natural_romanize_text(hi_text)
-    en_words = [w for w in re.findall(r"\b[a-zA-Z]+\b", en_text) if len(w) > 2]
-    n_h = max(1, len(hi_tokens))
-    n_en = len(en_words)
+    N_w = len(hi_tokens)
+    n_s = sum(1 for tag in hi_tags if tag == "en_source")
     
     cmi_tr, hi_cnt, en_src_cnt, _ = compute_cmi_from_provenance(hi_tags)
     res = {
-        "translit": (" ".join(hi_tokens), cmi_tr, 0, hi_cnt + en_src_cnt)
+        "translit": {
+            "text": " ".join(hi_tokens),
+            "cmi": cmi_tr,
+            "cmi_measured": cmi_tr,
+            "band_feasible": True,
+            "inserted_tokens": 0,
+            "total_words": hi_cnt + en_src_cnt,
+            "variant_method": "natural_romanization",
+        }
     }
     
-    # Strictly monotonic token allocation: k_low < k_mid < k_high (subject to available English content words)
-    k_low = max(1, min(n_en, max(1, int(round(0.15 * n_h)))))
-    k_mid = max(k_low + (1 if n_en > k_low else 0), min(n_en, max(2, int(round(0.28 * n_h)))))
-    k_high = max(k_mid + (1 if n_en > k_mid else 0), min(n_en, max(3, int(round(0.42 * n_h)))))
+    # 1. Eligible English candidate spans from en_text
+    en_words = [w for w in re.findall(r"\b[a-zA-Z]+\b", en_text) if len(w) > 2]
+    if len(set(w.lower() for w in en_words)) < 3:
+        en_words = [w for w in re.findall(r"\b[a-zA-Z]+\b", en_text) if len(w) >= 2]
+        
+    seen = set()
+    unique_en = []
+    for w in en_words:
+        wl = w.lower()
+        if wl not in seen:
+            seen.add(wl)
+            unique_en.append(w)
+            
+    # 2. Eligible substitution positions in hi_tokens (content words, non-colloquial)
+    content_pos = [i for i, (t, tag) in enumerate(zip(hi_tokens, hi_tags))
+                   if tag == "hi" and t.lower().strip(".,!?:;\"'") not in COLLOQUIAL_DICT.values()]
+    if len(content_pos) < 3:
+        other_pos = [i for i, (t, tag) in enumerate(zip(hi_tokens, hi_tags))
+                     if tag == "hi" and i not in content_pos]
+        content_pos = content_pos + other_pos
+        
+    # Fixed deterministic shuffle per seed
+    seed_int = int(hashlib.sha256(f"cmi_{seed_id}_v3".encode("utf-8")).hexdigest(), 16) % (2**32)
+    rng = random.Random(seed_int)
     
-    band_specs = [
-        ("low", k_low),
-        ("mid", k_mid),
-        ("high", k_high)
+    shuffled_spans = list(unique_en)
+    rng.shuffle(shuffled_spans)
+    
+    shuffled_pos = list(content_pos)
+    rng.shuffle(shuffled_pos)
+    
+    max_k = min(len(shuffled_spans), len(shuffled_pos))
+    
+    # Search for optimal k1 < k2 < k3 <= max_k inside bands
+    # Target bands: Low: [10.0, 20.0], Mid: [20.0, 35.0], High: > 35.0
+    best_triple = None
+    best_score = -1
+    for k3_cand in range(3, max_k + 1):
+        cmi3 = round(100.0 * (n_s + k3_cand) / max(1, N_w), 2)
+        if cmi3 <= 35.0:
+            continue
+        for k2_cand in range(2, k3_cand):
+            cmi2 = round(100.0 * (n_s + k2_cand) / max(1, N_w), 2)
+            if not (20.0 <= cmi2 <= 35.0):
+                continue
+            for k1_cand in range(1, k2_cand):
+                cmi1 = round(100.0 * (n_s + k1_cand) / max(1, N_w), 2)
+                if not (10.0 <= cmi1 <= 20.0):
+                    continue
+                dist = abs(cmi1 - 15.0) + abs(cmi2 - 27.5) + abs(cmi3 - 42.0)
+                if best_triple is None or dist < best_score:
+                    best_triple = (k1_cand, k2_cand, k3_cand)
+                    best_score = dist
+                    
+    # Check band feasibility: lower bounds
+    k_lower_low = max(1, int(math.ceil(0.10 * N_w)) - n_s)
+    k_lower_mid = max(k_lower_low + 1, int(math.ceil(0.20 * N_w)) - n_s)
+    k_lower_high = max(k_lower_mid + 1, int(math.ceil(0.3501 * N_w)) - n_s)
+    
+    feasible_low = (max_k >= k_lower_low and max_k >= 1)
+    feasible_mid = (max_k >= k_lower_mid and max_k >= 2)
+    feasible_high = (max_k >= k_lower_high and max_k >= 3)
+    
+    if best_triple is not None:
+        k1, k2, k3 = best_triple
+    else:
+        k1 = max(1, min(max(1, max_k - 2), max(1, int(round(0.15 * N_w)) - n_s)))
+        k2 = max(k1 + 1, min(max(2, max_k - 1), max(2, int(round(0.27 * N_w)) - n_s)))
+        k3 = max(k2 + 1, min(max(3, max_k), max(3, int(round(0.40 * N_w)) - n_s)))
+        if max_k >= 3:
+            k3 = min(max_k, k3)
+            k2 = min(k3 - 1, k2)
+            k1 = min(k2 - 1, k1)
+            k1 = max(1, k1)
+            k2 = max(k1 + 1, k2)
+            k3 = max(k2 + 1, k3)
+            
+    band_params = [
+        ("low", k1, feasible_low),
+        ("mid", k2, feasible_mid),
+        ("high", k3, feasible_high),
     ]
     
-    for band_name, k in band_specs:
-        chosen_en = en_words[:k]
+    # Strictly nested substitution:
+    sub_pairs = list(zip(shuffled_pos, shuffled_spans))
+    
+    for band_name, k, is_feas in band_params:
+        chosen_subs = dict(sub_pairs[:k])
         mixed_tokens = []
         mixed_tags = []
-        en_idx = 0
-        step = max(1, n_h // (k + 1))
-        
         for idx, (t, tag) in enumerate(zip(hi_tokens, hi_tags)):
-            clean_t = t.lower().strip(".,!?:;\"'")
-            if idx % step == 0 and en_idx < len(chosen_en) and clean_t not in COLLOQUIAL_DICT.values() and tag != "other":
-                mixed_tokens.append(chosen_en[en_idx])
+            if idx in chosen_subs:
+                en_w = chosen_subs[idx]
+                punc_suffix = ""
+                if t.endswith((".", "?", "!", ",", ";", ":")):
+                    punc_suffix = t[-1]
+                mixed_tokens.append(en_w + punc_suffix)
                 mixed_tags.append("en_inserted")
-                en_idx += 1
             else:
                 mixed_tokens.append(t)
                 mixed_tags.append(tag)
                 
         cmi_val, _, _, n_ins = compute_cmi_from_provenance(mixed_tags)
         tot_w = sum(1 for tg in mixed_tags if tg in ["hi", "en_source", "en_inserted"])
-        res[band_name] = (" ".join(mixed_tokens), cmi_val, n_ins, tot_w)
+        res[band_name] = {
+            "text": " ".join(mixed_tokens),
+            "cmi": cmi_val,
+            "cmi_measured": cmi_val,
+            "band_feasible": is_feas,
+            "inserted_tokens": n_ins,
+            "total_words": tot_w,
+            "variant_method": "synthetic_lexical_substitution",
+        }
         
     return res
 
@@ -689,8 +852,14 @@ def run_stage1_addendum5_pipeline():
     print(f"  - Master Manifest v3 SHA-256: {manifest_payload['manifest_sha256']}")
     print(f"  - Dev seeds: {manifest_payload['dev_count']} ({manifest_payload['dev_count']/len(manifest_records)*100:.1f}%), Test seeds: {manifest_payload['test_count']} ({manifest_payload['test_count']/len(manifest_records)*100:.1f}%)")
 
-    # In-memory translation caching
-    translation_cache = {}
+    # In-memory and persistent translation caching
+    translation_cache_file = os.path.join(CONFIG["cache_dir"], "nllb_translations.json")
+    if os.path.exists(translation_cache_file):
+        with open(translation_cache_file, "r", encoding="utf-8") as f:
+            translation_cache = json.load(f)
+        print(f"  - Loaded {len(translation_cache)} cached NLLB translations from {translation_cache_file}")
+    else:
+        translation_cache = {}
     
     def generate_nllb(texts: List[str], tgt_lang: str, gen_params: Dict[str, Any]) -> List[str]:
         results = [None] * len(texts)
@@ -717,6 +886,8 @@ def run_stage1_addendum5_pipeline():
             key = f"{texts[idx]}_{tgt_lang}_{gen_params['num_beams']}"
             translation_cache[key] = dec
             results[idx] = dec
+        with open(translation_cache_file, "w", encoding="utf-8") as f:
+            json.dump(translation_cache, f, ensure_ascii=False, indent=2)
         return results
 
     print("\n[3] Generating Natural Hinglish, Provenance CMI, and Bhojpuri Analysis across seeds...")
@@ -742,16 +913,16 @@ def run_stage1_addendum5_pipeline():
             if s.get("gold_hi_human"):
                 hi_primary[idx] = s["gold_hi_human"]
                 
-        hing_batch = [build_three_hinglish_bands_monotonic(hi_primary[idx], src_en[idx]) for idx in range(len(batch))]
+        hing_batch = [build_three_hinglish_bands_monotonic(hi_primary[idx], src_en[idx], batch[idx]["seed_id"]) for idx in range(len(batch))]
         
         with torch.no_grad():
             emb_en = labse_model.encode(src_en, convert_to_numpy=True, batch_size=batch_size)
             emb_hi = labse_model.encode(hi_primary, convert_to_numpy=True, batch_size=batch_size)
             emb_bho = labse_model.encode(bho_primary, convert_to_numpy=True, batch_size=batch_size)
-            emb_tr = labse_model.encode([h["translit"][0] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
-            emb_low = labse_model.encode([h["low"][0] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
-            emb_mid = labse_model.encode([h["mid"][0] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
-            emb_high = labse_model.encode([h["high"][0] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
+            emb_tr = labse_model.encode([h["translit"]["text"] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
+            emb_low = labse_model.encode([h["low"]["text"] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
+            emb_mid = labse_model.encode([h["mid"]["text"] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
+            emb_high = labse_model.encode([h["high"]["text"] for h in hing_batch], convert_to_numpy=True, batch_size=batch_size)
             
         def cos_sim(e1, e2):
             n1, n2 = np.linalg.norm(e1), np.linalg.norm(e2)
@@ -770,8 +941,8 @@ def run_stage1_addendum5_pipeline():
             # Bhojpuri Analysis
             def get_whole_word_markers(txt):
                 w_toks = set(re.findall(r"\b[\u0900-\u097F]+\b", txt))
-                matched = [m for m in BHOJPURI_DISTINCTIVE_MARKERS if m in w_toks]
-                for p in BHOJPURI_PHRASE_MARKERS:
+                matched = sorted([m for m in BHOJPURI_DISTINCTIVE_MARKERS if m in w_toks])
+                for p in sorted(BHOJPURI_PHRASE_MARKERS):
                     if p in txt and p not in matched:
                         matched.append(p)
                 return matched
@@ -822,6 +993,18 @@ def run_stage1_addendum5_pipeline():
             c_high = cos_sim(emb_en[b_idx], emb_high[b_idx])
             c_bho = cos_sim(emb_en[b_idx], emb_bho[b_idx])
 
+            # Detect Latin script in Hindi (excluding fixed task template for XNLI)
+            if src_name == "XNLI":
+                m = re.search(r'कथन:\s*(.*?)\s*परिकल्पना:\s*(.*?)\s*क्या कथन', hi_txt, re.DOTALL)
+                if m:
+                    premise_hypo = m.group(1) + " " + m.group(2)
+                else:
+                    lines = hi_txt.split('\n')
+                    premise_hypo = " ".join(lines[:2]).replace("कथन:", "").replace("परिकल्पना:", "")
+                hi_contains_latin = bool(re.search(r'[a-zA-Z]', premise_hypo))
+            else:
+                hi_contains_latin = bool(re.search(r'[a-zA-Z]', hi_txt))
+
             base_rec = {
                 "seed_id": sid,
                 "source": src_name,
@@ -829,6 +1012,7 @@ def run_stage1_addendum5_pipeline():
                 "type": stype,
                 "split": split,
                 "gold_answer": s.get("gold_answer"),
+                "hi_contains_latin": hi_contains_latin,
             }
             
             # 1. English
@@ -859,71 +1043,83 @@ def run_stage1_addendum5_pipeline():
             if not hi_qc_passed:
                 qc_failures.append({"seed_id": sid, "lang": "hi", "reason": f"labse={c_hi}, len_ratio={len_ratio_hi}"})
                 
-            # 3. Hinglish Translit (Natural)
-            txt_tr, cmi_tr, _, _ = hing_batch[b_idx]["translit"]
+            # 3. Hinglish Translit (Natural Romanization)
+            tr_dict = hing_batch[b_idx]["translit"]
             dataset_records.append({
                 **base_rec,
                 "id": f"{sid}_hinglish_translit",
                 "lang": "hinglish_translit",
-                "text": txt_tr,
-                "cmi": cmi_tr,
+                "text": tr_dict["text"],
+                "cmi": tr_dict["cmi"],
+                "cmi_measured": tr_dict["cmi_measured"],
+                "band_feasible": tr_dict["band_feasible"],
+                "variant_method": tr_dict["variant_method"],
                 "qc_scores": {
                     "labse_cosine": c_tr,
-                    "length_ratio": round(len(txt_tr) / max(1, len(en_txt)), 3),
+                    "length_ratio": round(len(tr_dict["text"]) / max(1, len(en_txt)), 3),
                     "is_qc_passed": True,
                 },
             })
             
-            # 4. Hinglish Mixed Low
-            txt_low, cmi_low, ins_low, tot_low = hing_batch[b_idx]["low"]
+            # 4. Hinglish Mixed Low (Synthetic Lexical Substitution)
+            low_dict = hing_batch[b_idx]["low"]
             dataset_records.append({
                 **base_rec,
                 "id": f"{sid}_hinglish_mixed_low",
                 "lang": "hinglish_mixed_low",
-                "text": txt_low,
-                "cmi": cmi_low,
+                "text": low_dict["text"],
+                "cmi": low_dict["cmi"],
+                "cmi_measured": low_dict["cmi_measured"],
+                "band_feasible": low_dict["band_feasible"],
                 "target_band": "low",
-                "inserted_tokens": ins_low,
-                "total_words": tot_low,
+                "inserted_tokens": low_dict["inserted_tokens"],
+                "total_words": low_dict["total_words"],
+                "variant_method": low_dict["variant_method"],
                 "qc_scores": {
                     "labse_cosine": c_low,
-                    "length_ratio": round(len(txt_low) / max(1, len(en_txt)), 3),
+                    "length_ratio": round(len(low_dict["text"]) / max(1, len(en_txt)), 3),
                     "is_qc_passed": True,
                 },
             })
             
-            # 5. Hinglish Mixed Mid
-            txt_mid, cmi_mid, ins_mid, tot_mid = hing_batch[b_idx]["mid"]
+            # 5. Hinglish Mixed Mid (Synthetic Lexical Substitution)
+            mid_dict = hing_batch[b_idx]["mid"]
             dataset_records.append({
                 **base_rec,
                 "id": f"{sid}_hinglish_mixed_mid",
                 "lang": "hinglish_mixed_mid",
-                "text": txt_mid,
-                "cmi": cmi_mid,
+                "text": mid_dict["text"],
+                "cmi": mid_dict["cmi"],
+                "cmi_measured": mid_dict["cmi_measured"],
+                "band_feasible": mid_dict["band_feasible"],
                 "target_band": "mid",
-                "inserted_tokens": ins_mid,
-                "total_words": tot_mid,
+                "inserted_tokens": mid_dict["inserted_tokens"],
+                "total_words": mid_dict["total_words"],
+                "variant_method": mid_dict["variant_method"],
                 "qc_scores": {
                     "labse_cosine": c_mid,
-                    "length_ratio": round(len(txt_mid) / max(1, len(en_txt)), 3),
+                    "length_ratio": round(len(mid_dict["text"]) / max(1, len(en_txt)), 3),
                     "is_qc_passed": True,
                 },
             })
             
-            # 6. Hinglish Mixed High
-            txt_high, cmi_high, ins_high, tot_high = hing_batch[b_idx]["high"]
+            # 6. Hinglish Mixed High (Synthetic Lexical Substitution)
+            high_dict = hing_batch[b_idx]["high"]
             dataset_records.append({
                 **base_rec,
                 "id": f"{sid}_hinglish_mixed_high",
                 "lang": "hinglish_mixed_high",
-                "text": txt_high,
-                "cmi": cmi_high,
+                "text": high_dict["text"],
+                "cmi": high_dict["cmi"],
+                "cmi_measured": high_dict["cmi_measured"],
+                "band_feasible": high_dict["band_feasible"],
                 "target_band": "high",
-                "inserted_tokens": ins_high,
-                "total_words": tot_high,
+                "inserted_tokens": high_dict["inserted_tokens"],
+                "total_words": high_dict["total_words"],
+                "variant_method": high_dict["variant_method"],
                 "qc_scores": {
                     "labse_cosine": c_high,
-                    "length_ratio": round(len(txt_high) / max(1, len(en_txt)), 3),
+                    "length_ratio": round(len(high_dict["text"]) / max(1, len(en_txt)), 3),
                     "is_qc_passed": True,
                 },
             })
@@ -957,46 +1153,77 @@ def run_stage1_addendum5_pipeline():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     print(f"\n[4] Exported full dataset to: {CONFIG['dataset_output']} ({len(dataset_records)} rows)")
 
+    # Export XSTest Homonym + Figurative Translation Check CSV
+    xstest_check_rows = []
+    for r in dataset_records:
+        if r["source"] == "XSTest" and r["category"] in ["benign_homonyms", "benign_figurative_language"] and r["lang"] in ["hi", "bho"]:
+            src_rec = next(x for x in dataset_records if x["seed_id"] == r["seed_id"] and x["lang"] == "en")
+            xstest_check_rows.append({
+                "item_id": r["id"],
+                "seed_id": r["seed_id"],
+                "source": r["source"],
+                "category": r["category"],
+                "lang": r["lang"],
+                "source_text_en": src_rec["text"],
+                "variant_text": r["text"],
+                "meaning_preserved_Y_N": "",
+                "still_benign_Y_N": "",
+                "notes": "",
+            })
+    pd.DataFrame(xstest_check_rows).to_csv(CONFIG["xstest_translation_check_csv"], index=False)
+    print(f"[5] Exported XSTest homonym + figurative check ({len(xstest_check_rows)} rows) to: {CONFIG['xstest_translation_check_csv']}")
+
     # Export 30 Random Bhojpuri Spot-Checks
     random.seed(CONFIG["seed"])
     spot_sample = random.sample(bho_spotcheck_pool, min(30, len(bho_spotcheck_pool)))
     pd.DataFrame(spot_sample).to_csv(CONFIG["bhojpuri_spotcheck_csv"], index=False)
-    print(f"[5] Exported 30 Bhojpuri spot-checks to: {CONFIG['bhojpuri_spotcheck_csv']}")
+    print(f"[6] Exported 30 Bhojpuri spot-checks to: {CONFIG['bhojpuri_spotcheck_csv']}")
 
-    # Export Main RFC 4180 Human Validation CSV (self_harm excluded, hi/bho rows from HarmBench/XSTest/XNLI, translit held)
-    main_val_rows = []
-    # Candidate pools from HarmBench, XSTest, XNLI across hi and bho
-    for lang in ["hi", "bho"]:
-        sub = [r for r in dataset_records if r["lang"] == lang and r["type"] != "self_harm"]
-        # Sample ~110 items per language stratified across sources
-        by_src = defaultdict(list)
-        for r in sub:
-            by_src[r["source"]].append(r)
-        chosen_lang = []
-        for src, items in by_src.items():
-            k_src = 40 if src in ["HarmBench", "XNLI"] else 30
-            random.seed(CONFIG["seed"])
-            chosen_lang.extend(random.sample(items, min(len(items), k_src)))
-        for r in chosen_lang:
-            src_rec = next(x for x in dataset_records if x["seed_id"] == r["seed_id"] and x["lang"] == "en")
-            main_val_rows.append({
-                "item_id": r["id"],
-                "seed_id": r["seed_id"],
-                "source": r["source"],
-                "lang": r["lang"],
-                "type": r["type"],
-                "category": r["category"],
-                "split": r["split"],
-                "source_text_en": src_rec["text"],
-                "variant_text": r["text"],
-                "meaning_preserved_Y_N": "",
-                "fluency_1_to_5": "",
-                "naturalness_1_to_5": "",
-                "annotator_notes": "",
-            })
+    # Export Main RFC 4180 Human Validation CSV (self_harm excluded, hi: 0 XNLI, bho: includes XNLI)
+    random.seed(CONFIG["seed"])
+    seeds_by_src = defaultdict(dict)
+    for r in dataset_records:
+        if r["lang"] == "en":
+            seeds_by_src[r["source"]][r["seed_id"]] = r
             
+    dna_unsafe_sids = [sid for sid, r in seeds_by_src["Do-Not-Answer"].items() if r["type"] == "unsafe_request"]
+    hb_sids = list(seeds_by_src["HarmBench"].keys())
+    xstest_sids = list(seeds_by_src["XSTest"].keys())
+    xnli_sids = list(seeds_by_src["XNLI"].keys())
+    
+    hi_sampled = (
+        [(sid, "hi") for sid in random.sample(dna_unsafe_sids, 50)] +
+        [(sid, "hi") for sid in random.sample(hb_sids, 50)] +
+        [(sid, "hi") for sid in random.sample(xstest_sids, 40)]
+    )
+    bho_sampled = (
+        [(sid, "bho") for sid in random.sample(dna_unsafe_sids, 45)] +
+        [(sid, "bho") for sid in random.sample(hb_sids, 45)] +
+        [(sid, "bho") for sid in random.sample(xstest_sids, 25)] +
+        [(sid, "bho") for sid in random.sample(xnli_sids, 25)]
+    )
+    
+    main_val_rows = []
+    for sid, lang in hi_sampled + bho_sampled:
+        src_rec = next(x for x in dataset_records if x["seed_id"] == sid and x["lang"] == "en")
+        tgt_rec = next(x for x in dataset_records if x["seed_id"] == sid and x["lang"] == lang)
+        main_val_rows.append({
+            "item_id": f"{sid}_{lang}",
+            "seed_id": sid,
+            "source": src_rec["source"],
+            "lang": lang,
+            "type": src_rec["type"],
+            "category": src_rec["category"],
+            "split": src_rec["split"],
+            "source_text_en": src_rec["text"],
+            "variant_text": tgt_rec["text"],
+            "meaning_preserved_Y_N": "",
+            "fluency_1_to_5": "",
+            "naturalness_1_to_5": "",
+            "annotator_notes": "",
+        })
     pd.DataFrame(main_val_rows).to_csv(CONFIG["human_validation_csv"], index=False)
-    print(f"[6] Exported Main validation sheet (self-harm excluded, {len(main_val_rows)} rows) to: {CONFIG['human_validation_csv']}")
+    print(f"[7] Exported Main validation sheet (self-harm excluded, 0 XNLI in hi, {len(main_val_rows)} rows) to: {CONFIG['human_validation_csv']}")
 
     # Export Separate Opt-In Self-Harm Sheet
     sh_rows = []
@@ -1020,7 +1247,7 @@ def run_stage1_addendum5_pipeline():
             "annotator_notes": "",
         })
     pd.DataFrame(sh_rows).to_csv(CONFIG["selfharm_sheet_csv"], index=False)
-    print(f"[7] Exported Opt-in Self-Harm sheet ({len(sh_rows)} rows) to: {CONFIG['selfharm_sheet_csv']}")
+    print(f"[8] Exported Opt-in Self-Harm sheet ({len(sh_rows)} rows) to: {CONFIG['selfharm_sheet_csv']}")
 
     # Diagnostics Logs
     with open(CONFIG["bhojpuri_qc_log"], "w", encoding="utf-8") as f:

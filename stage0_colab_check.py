@@ -229,40 +229,34 @@ print_banner("3. CANDIDATE GENERATION & GUARD MODELS SHORTLIST BENCHMARK")
 
 candidate_models = [
     {
-        "model_id": "meta-llama/Meta-Llama-3-8B-Instruct",
+        "model_id": "meta-llama/Llama-3.1-8B-Instruct",
         "is_gemma2": False,
         "is_guard": False,
-        "desc": "Primary alignment baseline (8B)"
-    },
-    {
-        "model_id": "mistralai/Mistral-7B-Instruct-v0.3",
-        "is_gemma2": False,
-        "is_guard": False,
-        "desc": "Mistral v0.3 tokenizer baseline (7B)"
-    },
-    {
-        "model_id": "google/gemma-2-9b-it",
-        "is_gemma2": True,
-        "is_guard": False,
-        "desc": "Google Gemma-2 (9B) with eager attention"
+        "desc": "Meta Llama-3.1 8B Instruct primary alignment baseline"
     },
     {
         "model_id": "Qwen/Qwen2.5-7B-Instruct",
         "is_gemma2": False,
         "is_guard": False,
-        "desc": "Qwen 2.5 multilingual baseline (7B)"
+        "desc": "Qwen 2.5 7B Instruct multilingual baseline"
     },
     {
-        "model_id": "sarvamai/sarvam-2b-v0.5",
+        "model_id": "google/gemma-2-9b-it",
+        "is_gemma2": True,
+        "is_guard": False,
+        "desc": "Google Gemma-2 9B IT with eager attention"
+    },
+    {
+        "model_id": "CohereForAI/aya-expanse-8b",
         "is_gemma2": False,
         "is_guard": False,
-        "desc": "Sarvam Indic-specialized lightweight model (2B)"
+        "desc": "Cohere For AI Aya Expanse 8B multilingual model"
     },
     {
         "model_id": "meta-llama/Llama-Guard-3-8B",
         "is_gemma2": False,
         "is_guard": True,
-        "desc": "Safety classifier head (8B)"
+        "desc": "Llama Guard 3 8B safety classifier head"
     }
 ]
 
@@ -286,8 +280,8 @@ print_banner("4. TRANSLATION MODELS LOAD CHECKS (NLLB & IndicTrans2)")
 
 translation_checks = []
 
-# Test NLLB-200-3.3B in 4-bit vs 8-bit
-print("\n---> Testing: facebook/nllb-200-3.3B (4-bit NF4)")
+# Test NLLB-200-3.3B in fp16
+print("\n---> Testing: facebook/nllb-200-3.3B (fp16)")
 cleanup_memory()
 nllb_res = {"model_id": "facebook/nllb-200-3.3B", "status": "FAILED", "vram_gb": 0.0, "error": None}
 try:
@@ -296,7 +290,7 @@ try:
     nllb_tok = AutoTokenizer.from_pretrained("facebook/nllb-200-3.3B")
     nllb_mod = AutoModelForSeq2SeqLM.from_pretrained(
         "facebook/nllb-200-3.3B",
-        quantization_config=bnb_config_nf4,
+        torch_dtype=torch.float16,
         device_map="auto"
     )
     load_time = time.time() - t0
@@ -304,7 +298,7 @@ try:
     nllb_res["status"] = "SUCCESS"
     nllb_res["vram_gb"] = round(peak_vram, 2)
     nllb_res["load_time"] = round(load_time, 2)
-    print(f"     NLLB-200-3.3B loaded in 4-bit in {load_time:.2f}s. Peak Reserved VRAM: {peak_vram:.2f} GB")
+    print(f"     NLLB-200-3.3B loaded in fp16 in {load_time:.2f}s. Peak Reserved VRAM: {peak_vram:.2f} GB")
 except Exception as e:
     nllb_res["error"] = str(e)
     print(f"     [FAILED] NLLB-200-3.3B load: {e}")
@@ -357,10 +351,71 @@ finally:
 translation_checks.append(it2_res)
 
 # %% [markdown]
-# ### Cell 6: Summary Report & Verification Table
+# ### Cell 6: AI4Bharat Transliteration Library Install and Test (20 Sentences)
 
 # %%
-print_banner("5. T4 VRAM AUDIT SUMMARY REPORT")
+print_banner("5. AI4BHARAT TRANSLITERATION TEST (20 SENTENCES)")
+
+try:
+    import subprocess
+    print("Attempting to load or install ai4bharat-transliteration...")
+    try:
+        from ai4bharat.transliteration import XlitEngine
+    except ImportError:
+        print("ai4bharat-transliteration not installed. Running pip install...")
+        install_res = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", "ai4bharat-transliteration"],
+            capture_output=True,
+            text=True
+        )
+        if install_res.returncode == 0:
+            print("Successfully installed ai4bharat-transliteration.")
+            from ai4bharat.transliteration import XlitEngine
+        else:
+            raise ImportError(f"Installation failed: {install_res.stderr.strip()}")
+
+    print("Initializing XlitEngine for Hindi (hi)...")
+    engine = XlitEngine("hi", beam_width=4, rescore=False)
+
+    test_sentences = [
+        "namaste aap kaise hain?",
+        "computer aur internet aaj ke samay mein bahut mahatvapurna hain.",
+        "cyber suraksha ke niyam kya hain?",
+        "kya aap mujhe ek email draft karne mein madad kar sakte hain?",
+        "bank khate mein paise transfer karne ke tarike bataiye.",
+        "doctor se online appointment kaise book karein?",
+        "mobile phone ki battery life kaise badhayein?",
+        "bharatiya samvidhan ke maulik adhikar kaun se hain?",
+        "data privacy aur suraksha mein kya antar hai?",
+        "artificial intelligence ka bhavishya kya hai?",
+        "password reset karne ke liye kya karein?",
+        "online shopping karte samay kin baaton ka dhyan rakhein?",
+        "social media par farzi khabron se kaise bachein?",
+        "python programming language kaise seekhein?",
+        "machine learning algorithm kaise kaam karte hain?",
+        "cloud computing ke kya fayde hain?",
+        "digital payment ke surakshit tarike kya hain?",
+        "software update karna kyon zaroori hai?",
+        "kya aap is paragraph ka anuvad kar sakte hain?",
+        "aaj ke mukhya samachar kya hain?"
+    ]
+
+    print(f"\nExecuting transliteration across {len(test_sentences)} sentences:")
+    for idx, sent in enumerate(test_sentences, 1):
+        out = engine.translit_sentence(sent)
+        print(f"[{idx:02d}] Source : {sent}")
+        print(f"     Translit: {out}")
+    print("\n[SUCCESS] AI4Bharat transliteration test successfully completed on 20 sentences.")
+
+except Exception as e:
+    print(f"\n[NOTE / WARNING] AI4Bharat transliteration check: {e}")
+    print("Detailed dependency notice: ai4bharat-transliteration may require specific onnxruntime/cython or model assets.")
+
+# %% [markdown]
+# ### Cell 7: Summary Report & Verification Table
+
+# %%
+print_banner("6. T4 VRAM AUDIT SUMMARY REPORT")
 
 header = f"{'Model ID':<35} | {'Status':<7} | {'Alloc GB':<8} | {'Peak Res GB':<11} | {'Remaining':<9} | {'Fit T4'}"
 print(header)
@@ -397,3 +452,4 @@ with open("stage0_colab_results.json", "w") as f:
 
 print("\nBenchmark results saved to stage0_colab_results.json")
 print("Stage 0 Colab check complete.")
+
