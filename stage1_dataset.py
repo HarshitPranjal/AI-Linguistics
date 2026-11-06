@@ -230,7 +230,7 @@ LOANWORD_BASE = {
     "वायरस": "virus", "मैलवेयर": "malware", "स्पैम": "spam", "फ़िशिंग": "phishing",
     "फिशिंग": "phishing", "ट्रोजन": "trojan", "रिमोट": "remote", "एक्सेस": "access",
     "सिक्योरिटी": "security", "टेम्पलेट": "template", "स्क्रिप्ट": "script", "बोटनेट": "botnet",
-    "ड्रग": "drug", "केमिकल": "chemical", "लैब": "lab", "लैबोरेटरी": "laboratory",
+    "ड्रग": "drug", "ड्रग्स": "drugs", "केमिकल": "chemical", "लैब": "lab", "लैबोरेटरी": "laboratory",
     "टेस्ट": "test", "टेक्स्ट": "text", "कंटेंट": "content", "यूजर": "user",
     "ग्रुप": "group", "चैनल": "channel", "लिंक": "link", "क्लिक": "click",
     "डाउनलोड": "download", "अपलोड": "upload", "इंस्टॉल": "install", "डिलीट": "delete",
@@ -241,20 +241,33 @@ LOANWORD_BASE = {
     "ऑफिस": "office", "होटल": "hotel", "क्लास": "class", "पार्टी": "party",
     "क्लब": "club", "गेम": "game", "टीम": "team", "मैच": "match",
     "प्लेयर": "player", "टिकट": "ticket", "ट्रिप": "trip", "टूर": "tour",
-    "कार": "car", "बस": "bus", "ट्रेन": "train", "फ्लाइट": "flight",
+    "कार": "car", "ट्रेन": "train", "फ्लाइट": "flight",
     "रोड": "road", "ट्रैफिक": "traffic", "मशीन": "machine", "टूल": "tool",
     "डिवाइस": "device", "सिग्नल": "signal", "सेंसर": "sensor", "कैमरा": "camera",
     "स्क्रीन": "screen", "बैटरी": "battery", "चार्ज": "charge", "चार्जर": "charger",
     "केबल": "cable", "बॉक्स": "box", "बोक्स": "box", "गैस": "gas",
-    "प्लास्टिक": "plastic", "ग्लास": "glass", "मेटल": "metal", "प्रेशर": "pressure",
-    "स्पीड": "speed", "पावर": "power", "एनERGY": "energy", "मॉडल": "model",
+    "प्लास्टिक": "plastic", "ग्लास": "glass", "गिलास": "glass", "मेटल": "metal", "प्रेशर": "pressure",
+    "स्पीड": "speed", "पावर": "power", "एनर्जी": "energy", "मॉडल": "model",
     "पॉइंट": "point", "लेवल": "level", "रेंज": "range", "नंबर": "number",
-    "टोटल": "total", "रिजल्ट": "result", "केस": "case", "प्रॉब्लम": "problem",
+    "टोटल": "total", "रिजल्ट": "result", "प्रॉब्लम": "problem",
     "ऑप्शन": "option", "स्टेप": "step", "रूल": "rule", "पायलट": "pilot",
     "जनरल": "general", "कैनेडी": "kennedy", "वॉशिंगटन": "washington", "बोट": "bot",
     "रिवर्स": "reverse", "शेल": "shell", "इंजेक्शन": "injection", "एम्पलीफिकेशन": "amplification",
-    "एंटीवायरस": "antivirus", "कीड़े": "worms", "कॉनकॉर्ड": "concorde", "चॉकलेट": "chocolate",
-    "ब्लॉग": "blog", "शॉप": "shop", "स्क्वाड्रन": "squadron", "कॉल": "call", "पोस्ट": "post"
+    "एंटीवायरस": "antivirus", "कॉनकॉर्ड": "concorde", "चॉकलेट": "chocolate",
+    "ब्लॉग": "blog", "शॉप": "shop", "स्क्वाड्रन": "squadron", "कॉल": "call", "पोस्ट": "post",
+    # Uncovered confident loanwords from fuzzy-matching review
+    "पायरेट": "pirate", "सेटिंग्स": "settings", "सेटिंग": "setting", "लीक": "leak",
+    "सेक्सिस्ट": "sexist", "इलेक्ट्रॉनिक": "electronic", "बायपास": "bypass", "पाइप": "pipe",
+    "क्रेडिट": "credit", "मास्क": "mask", "फिल्म": "film", "स्ट्रीट": "street",
+    "ब्रॉड": "broad", "पोर्च": "porch", "पैराशूट": "parachute", "अपार्टमेंट": "apartment",
+    "न्यूयॉर्क": "new york", "यॉर्क": "york", "यूनाइटेड": "united", "अमेरिका": "america",
+    "अम्रिका": "america", "थर्ड": "third", "सोशल": "social", "मीडिया": "media",
+    "शूटिंग": "shooting", "स्पेशल": "special", "ट्रिगर": "trigger", "बटन": "button",
+    "सर्वे": "survey", "प्राइवेट": "private", "कॉर्पोरेट": "corporate", "वोटिंग": "voting",
+    "रैनसमवेयर": "ransomware", "स्पायवेयर": "spyware", "मेथाम्फेटामिन": "methamphetamine",
+    "बोटुलिनम": "botulinum", "निटाज़ीन": "nitazene", "इबोला": "ebola", "टैबुन": "tabun",
+    "लेवीसाइट": "lewisite", "सारिन": "sarin", "पैराथियन": "parathion", "फ़िल्टरिंग": "filtering",
+    "ब्रेनस्टॉर्म": "brainstorm", "क्लाउड": "cloud", "खमेर": "khmer", "टेक्सास": "texas"
 }
 
 def english_plural(singular: str) -> str:
@@ -538,6 +551,14 @@ def build_three_hinglish_bands_monotonic(hi_text: str, en_text: str, seed_id: st
             "variant_method": "synthetic_lexical_substitution",
         }
         
+    # Post-check for monotonicity and monolingual collapse:
+    # If seed brevity or span saturation causes non-strictly increasing CMI or high-band collapse (<= 35%):
+    c_low = res["low"]["cmi_measured"]
+    c_mid = res["mid"]["cmi_measured"]
+    c_high = res["high"]["cmi_measured"]
+    if (not (c_low < c_mid < c_high)) or c_high <= 35.0:
+        res["high"]["band_feasible"] = False
+
     return res
 
 # %%
@@ -1153,10 +1174,11 @@ def run_stage1_addendum5_pipeline():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     print(f"\n[4] Exported full dataset to: {CONFIG['dataset_output']} ({len(dataset_records)} rows)")
 
-    # Export XSTest Homonym + Figurative Translation Check CSV
+    # Export XSTest Homonym + Figurative + Safe Contexts + Safe Targets Translation Check CSV
     xstest_check_rows = []
+    xstest_check_cats = ["benign_homonyms", "benign_figurative_language", "benign_safe_contexts", "benign_safe_targets"]
     for r in dataset_records:
-        if r["source"] == "XSTest" and r["category"] in ["benign_homonyms", "benign_figurative_language"] and r["lang"] in ["hi", "bho"]:
+        if r["source"] == "XSTest" and r["category"] in xstest_check_cats and r["lang"] in ["hi", "bho"]:
             src_rec = next(x for x in dataset_records if x["seed_id"] == r["seed_id"] and x["lang"] == "en")
             xstest_check_rows.append({
                 "item_id": r["id"],
@@ -1171,7 +1193,7 @@ def run_stage1_addendum5_pipeline():
                 "notes": "",
             })
     pd.DataFrame(xstest_check_rows).to_csv(CONFIG["xstest_translation_check_csv"], index=False)
-    print(f"[5] Exported XSTest homonym + figurative check ({len(xstest_check_rows)} rows) to: {CONFIG['xstest_translation_check_csv']}")
+    print(f"[5] Exported XSTest check (homonyms, figurative, safe_contexts, safe_targets: {len(xstest_check_rows)} rows) to: {CONFIG['xstest_translation_check_csv']}")
 
     # Export 30 Random Bhojpuri Spot-Checks
     random.seed(CONFIG["seed"])
@@ -1218,6 +1240,7 @@ def run_stage1_addendum5_pipeline():
             "source_text_en": src_rec["text"],
             "variant_text": tgt_rec["text"],
             "meaning_preserved_Y_N": "",
+            "still_unsafe_Y_N": "" if src_rec["type"] == "unsafe_request" else "N/A",
             "fluency_1_to_5": "",
             "naturalness_1_to_5": "",
             "annotator_notes": "",

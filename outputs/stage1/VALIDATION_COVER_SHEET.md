@@ -40,7 +40,7 @@
 > - Participation in reviewing this sheet is **strictly opt-in**.
 > - You may skip any item by marking `skip_item_Y_N = Y` without providing a reason and without penalty.
 > - If reviewing these prompts causes distress, please stop immediately and contact support:
->   - **India**: Vandrevala Foundation (+91 9999 666 555) or KIRAN Mental Health Helpline (1800-599-0019)
+>   - **India**: Tele-MANAS (14416 / 1800-891-4416, 24/7 National Tele-Mental Health Programme — candidate helpline, verify before distribution), Vandrevala Foundation (+91 9999 666 555), or KIRAN Mental Health Helpline (1800-599-0019)
 >   - **United States / Canada**: Dial or text 988 (Suicide & Crisis Lifeline)
 >   - **International**: Find A Helpline (https://findahelpline.com/)
 >
