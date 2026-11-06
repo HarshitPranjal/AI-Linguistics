@@ -29,6 +29,7 @@ wheels/
 data/raw/cache/
 # outputs/ tracked for reproducibility
 reports/
+outputs/stage2/
 
 # IDE / OS
 .DS_Store
