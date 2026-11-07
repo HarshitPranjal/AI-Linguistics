@@ -365,7 +365,8 @@ def natural_romanize_word(w: str) -> str:
     rom_clean = "".join(res)
     return w.replace(clean, rom_clean)
 
-def natural_romanize_text(text: str) -> Tuple[List[str], List[str]]:
+def formal_romanize_text(text: str) -> Tuple[List[str], List[str]]:
+    """Formal, unambiguous IAST-based transliteration scheme."""
     text = text.replace("।", ".").replace("॥", ".")
     tokens = text.split()
     out_tokens = []
@@ -385,6 +386,44 @@ def natural_romanize_text(text: str) -> Tuple[List[str], List[str]]:
             out_tokens.append(rom)
             tags.append("hi")
     return out_tokens, tags
+
+def apply_colloquial_rules(word: str) -> str:
+    """
+    Colloquial transliteration rules fitted on Belebele hin_Deva/hin_Latn:
+    - की -> ki, के -> ke
+    - ee -> i, oo -> u
+    - semi-vowel y-glide hiatus resolution (lie -> liye, gae -> gaye)
+    - medial schwa syncope in open syllables VC_CV (karane -> karne, apane -> apne)
+    """
+    w = word
+    if w == "kee":
+        return "ki"
+    w = re.sub(r"ee", "i", w)
+    w = re.sub(r"oo", "u", w)
+    w = re.sub(r"([i])e\b", r"\1ye", w)
+    w = re.sub(r"([a])e\b", r"\1ye", w)
+    w = re.sub(r"([a])ee\b", r"\1yee", w)
+    def syncope(m):
+        v1, c1, c2, v2 = m.group(1), m.group(2), m.group(3), m.group(4)
+        return f"{v1}{c1}{c2}{v2}"
+    w = re.sub(r"([aeiou])([bcdfghjklmnpqrstvwxyz]+)a([bcdfghjklmnpqrstvwxyz]+)([aeiou])", syncope, w)
+    return w
+
+def colloquial_romanize_text(text: str) -> Tuple[List[str], List[str]]:
+    """Primary colloquial Hinglish transliteration pipeline."""
+    tokens, tags = formal_romanize_text(text)
+    new_tokens = []
+    for t in tokens:
+        clean = t.strip(".,?!:;\"'()[]{}")
+        if not clean:
+            new_tokens.append(t)
+            continue
+        c_mod = apply_colloquial_rules(clean)
+        new_tokens.append(t.replace(clean, c_mod))
+    return new_tokens, tags
+
+# Primary transliteration alias
+natural_romanize_text = colloquial_romanize_text
 
 # Comprehensive stoplist of native Hindi grammatical words and XNLI frequent native tokens
 NATIVE_HI_STOPLIST = set("""
@@ -701,12 +740,20 @@ def run_stage1_pipeline():
         hi_text = existing_texts[sid]["hi"]
         bho_text = existing_texts[sid]["bho"]
         
+        # Primary Colloquial Transliteration
         tr_tokens, tr_tags = natural_romanize_text(hi_text)
+        
+        # Baseline Formal Transliteration (preserved for Stage 6 ablation)
+        tr_tokens_formal, _ = formal_romanize_text(hi_text)
         
         # Devanagari character assertion
         joined_tr = " ".join(tr_tokens)
         deva_matches = re.findall(r"[\u0900-\u097F]", joined_tr)
-        assert len(deva_matches) == 0, f"Devanagari characters found in translit for seed {sid}: {deva_matches}"
+        assert len(deva_matches) == 0, f"Devanagari characters found in colloquial translit for seed {sid}: {deva_matches}"
+        
+        joined_tr_formal = " ".join(tr_tokens_formal)
+        deva_matches_formal = re.findall(r"[\u0900-\u097F]", joined_tr_formal)
+        assert len(deva_matches_formal) == 0, f"Devanagari characters found in formal translit for seed {sid}: {deva_matches_formal}"
         
         # Loanword replacement at tuned threshold 0.65
         cleaned_tr_tokens, replacements = apply_per_seed_loanword_matching(
@@ -720,6 +767,14 @@ def run_stage1_pipeline():
             r["split"] = meta["split"]
             r["source"] = meta["source"]
         all_loanword_replacements.extend(replacements)
+        
+        cleaned_tr_tokens_formal, _ = apply_per_seed_loanword_matching(
+            sid=sid,
+            en_text=en_text,
+            translit_tokens=tr_tokens_formal,
+            native_stoplist=combined_native_stoplist,
+            sim_threshold=0.65
+        )
         
         # Alignment-based code mixing
         align_res = build_alignment_based_hinglish_bands(
@@ -738,6 +793,7 @@ def run_stage1_pipeline():
             "hi_text": hi_text,
             "bho_text": bho_text,
             "tr_text": " ".join(cleaned_tr_tokens),
+            "tr_text_formal": " ".join(cleaned_tr_tokens_formal),
             "tr_tags": tr_tags,
             "bands": align_res["bands"],
             "align_pairs": align_res["valid_aligned_pairs"]
@@ -988,8 +1044,8 @@ def run_stage1_pipeline():
     pd.DataFrame(hand_fix_p1_hi).to_csv(proposals_csv_path, index=False)
     print(f"Exported {len(hand_fix_p1_hi)} P1 hand fix proposals (hi proposals + bho marked 'needs native translation') to: {proposals_csv_path}")
     
-    # 9. Rebuild and Export dataset.jsonl (5,530 rows)
-    print("[8] Assembling and Writing dataset.jsonl (5,530 rows)...")
+    # 9. Rebuild and Export dataset.jsonl (6,083 rows: 553 seeds x 11 variants)
+    print("[8] Assembling and Writing dataset.jsonl (6,083 rows)...")
     deprecated_path = os.path.join(CACHE_DIR, "deprecated_synthetic_rows.json")
     with open(deprecated_path, "r", encoding="utf-8") as f:
         deprecated_map = json.load(f)
@@ -1002,6 +1058,7 @@ def run_stage1_pipeline():
         hi_txt = pdata["hi_text"]
         bho_txt = pdata["bho_text"]
         tr_txt = pdata["tr_text"]
+        tr_txt_formal = pdata["tr_text_formal"]
         bands = pdata["bands"]
         
         base_rec = {
@@ -1035,7 +1092,7 @@ def run_stage1_pipeline():
             "qc_scores": {"labse_cosine": c_hi_qc, "length_ratio": lr_hi, "is_qc_passed": (c_hi_qc >= 0.70)}
         })
         
-        # 3. Hinglish Translit
+        # 3. Hinglish Translit (Primary Colloquial Scheme)
         lr_tr = round(len(tr_txt) / max(1, len(en_txt)), 3)
         new_dataset_records.append({
             **base_rec,
@@ -1045,8 +1102,26 @@ def run_stage1_pipeline():
             "cmi": 0.0,
             "cmi_measured": 0.0,
             "band_feasible": True,
-            "variant_method": "natural_romanization",
+            "variant_valid": True,
+            "status": "ACTIVE",
+            "variant_method": "natural_romanization_colloquial",
             "qc_scores": {"labse_cosine": c_hi_qc, "length_ratio": lr_tr, "is_qc_passed": True}
+        })
+        
+        # 3b. Hinglish Translit Formal (Baseline / Stage 6 Ablation Scheme)
+        lr_tr_f = round(len(tr_txt_formal) / max(1, len(en_txt)), 3)
+        new_dataset_records.append({
+            **base_rec,
+            "id": f"{sid}_hinglish_translit_formal",
+            "lang": "hinglish_translit_formal",
+            "text": tr_txt_formal,
+            "cmi": 0.0,
+            "cmi_measured": 0.0,
+            "band_feasible": True,
+            "variant_valid": True,
+            "status": "ACTIVE",
+            "variant_method": "natural_romanization_formal",
+            "qc_scores": {"labse_cosine": c_hi_qc, "length_ratio": lr_tr_f, "is_qc_passed": True}
         })
         
         # 4. Old Deprecated Rows (variant_valid: false)

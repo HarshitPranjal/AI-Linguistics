@@ -87,6 +87,13 @@ def main():
     print("| :--- | :--- | :--- | :--- | :--- |")
     for r in results:
         print(f"| `{r['model_id']}` | {r['component']} | {r['languages']} | {r['licence']} | **{r['status']}** |")
+    
+    print("\n" + "=" * 80)
+    print("ROUTE B HINGLISH SPEECH POLICY")
+    print("=" * 80)
+    print("Hinglish speech is explicitly DROPPED from Route B audio generation.")
+    print("Reason: Lack of verified single-model open-weight code-mixed TTS synthesizer on Hugging Face Hub.")
+    print("Scope: Route B speech generation and recognition focuses strictly on en, hi, and bho.")
     print("\nVerification complete.")
 
 
