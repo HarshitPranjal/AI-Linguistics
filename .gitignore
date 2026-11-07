@@ -27,9 +27,13 @@ wheels/
 *.bin
 *.safetensors
 data/raw/cache/
+data/raw/flores200/
+data/raw/
 # outputs/ tracked for reproducibility
-reports/
+/reports/
 outputs/stage2/
+!outputs/reports/
+!outputs/reports/**
 
 # IDE / OS
 .DS_Store

@@ -12,8 +12,10 @@
 # - Generate for all non-DEPRECATED dev rows (filter only at analysis).
 # - Record metadata: hi_contains_latin (bool), drift_tier (str), review_status (str).
 # - Token budget: max_new_tokens = 512 for all variants; record generated_chars, chars_per_token, word_count.
-# - Explicit generation finish_reason: 'eos' or 'length'.
-# - Response language classification in {deva_hindi, deva_bhojpuri_markers, latin_english, latin_romanized_hindi, mixed, other}.
+# - Explicit generation finish_reason: 'eos' or 'length' from generation output.
+# - Resolved model commit hash pinned in header and response record schema.
+# - Response language classification in {deva_no_bho_markers, deva_bho_markers, latin_english, latin_romanized_hindi, mixed, other}.
+#   (with deva_hindi and deva_bhojpuri_markers supported as backward-compatible aliases).
 #   Uses share of unambiguous Hindi function words from Stage 1 for Latin script, and Stage 1 whole-token markers for Devanagari.
 # - Resumable batched generation (left padding, length-sorted, batch 8).
 # - Strict content safety: Never print prompt text or responses to unsafe prompts in logs/stdout.
@@ -31,6 +33,7 @@ import platform
 import argparse
 from typing import Dict, List, Tuple, Any, Optional, Set
 from collections import Counter, defaultdict
+import csv
 
 import torch
 import transformers
@@ -54,7 +57,7 @@ else:
 # CONFIGURATION
 # ==============================================================================
 CONFIG = {
-    "stage": "2c",
+    "stage": "2d",
     "seed": GLOBAL_SEED,
     # Primary target model for evaluation
     "target_model_id": "Qwen/Qwen2.5-7B-Instruct",
@@ -94,13 +97,15 @@ CONFIG = {
     
     # Output paths
     "output_dir": "outputs/stage2",
+    "reports_dir": "outputs/reports",
     "responses_output_path": "outputs/stage2/route_a_responses.jsonl",
     "self_harm_output_path": "outputs/stage2/route_a_self_harm.jsonl",
     "plumbing_output_path": "outputs/stage2/route_a_plumbing.jsonl",
     "smoke_test_output_path": "outputs/stage2/route_a_smoke_test.jsonl",
     "smoke_test_report_path": "outputs/stage2/smoke_test_report.json",
+    "label_sample_output_path": "outputs/stage2/response_label_sample.csv",
     
-    # Execution modes: "plumbing" (local verification) or "full" (Colab batch execution)
+    # Execution modes: "plumbing" (local verification), "full" (Colab batch execution), or "export_sample"
     "execution_mode": "plumbing",
     
     # Environment token for gated models
@@ -108,6 +113,7 @@ CONFIG = {
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
+os.makedirs(CONFIG["reports_dir"], exist_ok=True)
 
 # %%
 # ==============================================================================
@@ -117,9 +123,9 @@ os.makedirs(CONFIG["output_dir"], exist_ok=True)
 BHOJPURI_DISTINCTIVE_MARKERS: Set[str] = {
     # Pronouns
     "हमरा", "हमके", "हमार", "हमनी", "रउआ", "राउर", "ओकरा", "एकर", "तोहरा", "तोहार",
-    # Verbs / Auxiliaries / Aspectual markers
-    "बा", "बानी", "बाड़न", "बाड़े", "बाड़", "रहल", "रहलन", "रहलि", "चाहीं", "सकऽ", "सकत", "सकतन",
-    "होखे", "करत", "सुनात", "कहऽ", "करीं", "बताईं", "बताव", "दीं", "लीं", "जाईं",
+    # Verbs / Auxiliaries / Aspectual markers (बाड़ and लीं removed as valid in standard Hindi)
+    "बा", "बानी", "बाड़न", "बाड़े", "रहल", "रहलन", "रहलि", "चाहीं", "सकऽ", "सकत", "सकतन",
+    "होखे", "करत", "सुनात", "कहऽ", "करीं", "बताईं", "बताव", "दीं", "जाईं",
     # Distinctive Postpositions / Quantifiers
     "एगो", "खातिर", "बदे", "तनी",
     # Interrogatives & Negatives
@@ -180,11 +186,12 @@ def get_hardware_name() -> str:
         return f"CPU ({platform.processor()}, {platform.system()})"
 
 
-def print_run_header(config: Dict[str, Any], model_id: str, model_revision: str):
+def print_run_header(config: Dict[str, Any], model_id: str, model_revision: str, model_commit_hash: Optional[str] = None):
     """Prints mandatory provenance run header."""
     dataset_sha = compute_file_sha256(config["dataset_path"])
     script_sha = compute_file_sha256(__file__) if os.path.exists(__file__) else "interactive_session"
     hw_name = get_hardware_name()
+    commit_str = model_commit_hash if model_commit_hash else "resolved_at_load"
     
     print("=" * 80)
     print("STAGE 2 RUN PROVENANCE HEADER")
@@ -193,6 +200,7 @@ def print_run_header(config: Dict[str, Any], model_id: str, model_revision: str)
     print(f"Script SHA-256:        {script_sha}")
     print(f"Model ID:              {model_id}")
     print(f"Model Revision:        {model_revision}")
+    print(f"Model Commit Hash:     {commit_str}")
     print(f"Transformers Version:  {transformers.__version__}")
     print(f"PyTorch Version:       {torch.__version__}")
     print(f"Hardware Device:       {hw_name}")
@@ -241,13 +249,31 @@ def analyze_bhojpuri_markers(text: str) -> Tuple[float, int, bool, List[str]]:
     return rate, len(matched), has_marker, matched
 
 
+CLASS_ALIASES: Dict[str, str] = {
+    "deva_hindi": "deva_no_bho_markers",
+    "deva_bhojpuri_markers": "deva_bho_markers",
+    "deva_no_bho_markers": "deva_no_bho_markers",
+    "deva_bho_markers": "deva_bho_markers",
+    "latin_english": "latin_english",
+    "latin_romanized_hindi": "latin_romanized_hindi",
+    "mixed": "mixed",
+    "other": "other",
+}
+
+
+def resolve_language_class(cls_name: str) -> str:
+    """Maps class aliases to canonical Stage 2d class names."""
+    return CLASS_ALIASES.get(cls_name, cls_name)
+
+
 def classify_response_language(
     text: str,
     config: Dict[str, Any] = CONFIG,
 ) -> Tuple[str, str, float, int, bool, List[str]]:
     """
-    Classifies response into one of the 6 formal classes:
-    {deva_hindi, deva_bhojpuri_markers, latin_english, latin_romanized_hindi, mixed, other}.
+    Classifies response into one of the formal Stage 2d classes:
+    {deva_no_bho_markers, deva_bho_markers, latin_english, latin_romanized_hindi, mixed, other}.
+    (Supports deva_hindi and deva_bhojpuri_markers as aliases).
     Returns: (lang_class, script, bho_rate, bho_count, has_bho, matched_markers)
     """
     if not text or len(text.strip()) == 0:
@@ -269,9 +295,9 @@ def classify_response_language(
         return "mixed", "mixed", bho_rate, bho_count, has_bho, matched_markers
     elif deva_ratio >= config["script_dominant_threshold"]:
         if bho_count >= config["bho_marker_threshold"]:
-            return "deva_bhojpuri_markers", "Deva", bho_rate, bho_count, has_bho, matched_markers
+            return "deva_bho_markers", "Deva", bho_rate, bho_count, has_bho, matched_markers
         else:
-            return "deva_hindi", "Deva", bho_rate, bho_count, has_bho, matched_markers
+            return "deva_no_bho_markers", "Deva", bho_rate, bho_count, has_bho, matched_markers
     elif latn_ratio >= config["script_dominant_threshold"]:
         tokens = re.findall(r"\b[a-zA-Z]+\b", text.lower())
         if not tokens:
@@ -413,9 +439,10 @@ class ModelSession:
         self.tokenizer = None
         self.device = None
         self.peak_vram_bytes = 0
+        self.commit_hash: Optional[str] = None
         
     def load(self):
-        """Loads model and left-padded tokenizer."""
+        """Loads model and left-padded tokenizer, pinning the model commit hash."""
         print(f"[Model Loader] Loading model {self.model_id} (rev: {self.model_revision})...")
         from transformers import AutoTokenizer, AutoModelForCausalLM
         
@@ -470,10 +497,25 @@ class ModelSession:
             print(f"[Model Loader] Loaded on CPU (multi-threaded, 8 threads).")
             
         self.model.eval()
+        
+        # Pin resolved commit hash (prefer exact 40-char snapshot hash over "main")
+        self.commit_hash = getattr(self.model.config, "_commit_hash", None)
+        if not self.commit_hash and hasattr(self.model, "generation_config"):
+            self.commit_hash = getattr(self.model.generation_config, "_commit_hash", None)
+        if not self.commit_hash or self.commit_hash == "main":
+            import glob
+            safe_id = self.model_id.replace("/", "--")
+            snap_pattern = os.path.expanduser(f"~/.cache/huggingface/hub/models--{safe_id}/snapshots/*")
+            snaps = glob.glob(snap_pattern)
+            if snaps:
+                self.commit_hash = os.path.basename(snaps[0])
+            else:
+                self.commit_hash = self.model_revision or "unknown"
+            
         return self
         
     def generate_batch(self, prompt_texts: List[str]) -> List[Dict[str, Any]]:
-        """Batched greedy generation with left padding, max_new_tokens=512."""
+        """Batched greedy generation with left padding, max_new_tokens=512, checking EOS presence."""
         formatted_prompts = [
             self.tokenizer.apply_chat_template(
                 [{"role": "user", "content": txt}],
@@ -505,15 +547,29 @@ class ModelSession:
         item_latency = round(batch_latency / max(1, len(prompt_texts)), 4)
         
         input_len = inputs["input_ids"].shape[1]
+        
+        # Build set of valid EOS token IDs
+        eos_token_ids = set()
+        if self.tokenizer.eos_token_id is not None:
+            if isinstance(self.tokenizer.eos_token_id, int):
+                eos_token_ids.add(self.tokenizer.eos_token_id)
+            elif isinstance(self.tokenizer.eos_token_id, (list, tuple, set)):
+                eos_token_ids.update(self.tokenizer.eos_token_id)
+        if hasattr(self.model, "generation_config") and self.model.generation_config.eos_token_id is not None:
+            if isinstance(self.model.generation_config.eos_token_id, int):
+                eos_token_ids.add(self.model.generation_config.eos_token_id)
+            elif isinstance(self.model.generation_config.eos_token_id, (list, tuple, set)):
+                eos_token_ids.update(self.model.generation_config.eos_token_id)
+
         results = []
         for i in range(len(prompt_texts)):
-            gen_ids = outputs[i][input_len:].tolist()
-            if self.tokenizer.pad_token_id in gen_ids:
-                gen_ids = [tid for tid in gen_ids if tid != self.tokenizer.pad_token_id]
-                
+            raw_gen_ids = outputs[i][input_len:].tolist()
+            has_eos_token = any(tid in eos_token_ids for tid in raw_gen_ids)
+            
+            gen_ids = [tid for tid in raw_gen_ids if tid != self.tokenizer.pad_token_id]
             num_generated = len(gen_ids)
-            truncated = bool(num_generated >= self.config["max_new_tokens"])
-            finish_reason = "length" if truncated else "eos"
+            truncated = bool(num_generated >= self.config["max_new_tokens"]) and not has_eos_token
+            finish_reason = "eos" if has_eos_token else ("length" if truncated else "eos")
             
             response_text = self.tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
             gen_chars = len(response_text)
@@ -616,6 +672,7 @@ def run_batched_generation_loop(
                 "seed_id": r["seed_id"],
                 "variant": r["variant"],
                 "model": session.model_id,
+                "model_commit_hash": getattr(session, "commit_hash", "unknown"),
                 "source": r.get("source"),
                 "category": r.get("category"),
                 "type": r.get("type"),
@@ -661,7 +718,8 @@ def run_batched_generation_loop(
 # ==============================================================================
 def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
     """Re-runs the 12-item plumbing test to verify updated schema and metrics."""
-    print_run_header(config, config["plumbing_model_id"], config["plumbing_model_revision"])
+    session = ModelSession(config["plumbing_model_id"], config["plumbing_model_revision"], config).load()
+    print_run_header(config, config["plumbing_model_id"], config["plumbing_model_revision"], session.commit_hash)
     
     benign_records = [
         r for r in data["standard_records"]
@@ -679,8 +737,6 @@ def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
     if os.path.exists(config["plumbing_output_path"]):
         os.remove(config["plumbing_output_path"])
         
-    session = ModelSession(config["plumbing_model_id"], config["plumbing_model_revision"], config).load()
-    
     try:
         completed = run_batched_generation_loop(
             session,
@@ -705,26 +761,132 @@ def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
 
 # %%
 # ==============================================================================
+# HUMAN LABELING EXPORT (100 BENIGN DEV RESPONSES)
+# ==============================================================================
+def export_response_label_sample(
+    responses_path: str = "outputs/stage2/route_a_smoke_test.jsonl",
+    output_path: str = "outputs/stage2/response_label_sample.csv",
+    sample_size: int = 100,
+    seed: int = 42,
+) -> str:
+    """
+    Exports a stratified sample of benign responses with blank human_class and notes columns.
+    Stratifies across the 4 core variants (en, hi, bho, hinglish_translit).
+    """
+    if not os.path.exists(responses_path):
+        raise FileNotFoundError(f"Responses file not found: {responses_path}")
+        
+    records = []
+    with open(responses_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                records.append(json.loads(line))
+                
+    # Filter for benign records
+    benign_records = [
+        r for r in records
+        if r.get("type") in ["borderline_benign", "utility_nli"] or
+           (r.get("category") and (r.get("category").startswith("benign") or r.get("category") == "utility_reasoning"))
+    ]
+    
+    variants = ["en", "hi", "bho", "hinglish_translit"]
+    records_by_var = {v: [r for r in benign_records if r.get("variant") == v] for v in variants}
+    
+    per_var_quota = max(1, sample_size // len(variants))
+    sampled = []
+    rng = random.Random(seed)
+    
+    for v in variants:
+        v_recs = records_by_var[v]
+        if len(v_recs) <= per_var_quota:
+            sampled.extend(v_recs)
+        else:
+            sampled.extend(rng.sample(v_recs, per_var_quota))
+            
+    # Sort for deterministic output
+    sampled.sort(key=lambda x: (x.get("variant", ""), x.get("seed_id", "")))
+    
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "seed_id",
+            "variant",
+            "model",
+            "token_count",
+            "finish_reason",
+            "response_language_class",
+            "human_class",
+            "notes",
+            "response"
+        ])
+        for r in sampled:
+            lang_cls = CLASS_ALIASES.get(r.get("response_language_class", ""), r.get("response_language_class", ""))
+            writer.writerow([
+                r.get("seed_id", ""),
+                r.get("variant", ""),
+                r.get("model", ""),
+                r.get("token_count", ""),
+                r.get("finish_reason", ""),
+                lang_cls,
+                "",  # blank for human labeling
+                "",  # blank notes
+                r.get("response", "").replace("\r\n", " ").replace("\n", " "),
+            ])
+            
+    print(f"[Export Sample] Exported {len(sampled)} items (target {sample_size}) to {output_path}")
+    return output_path
+
+
+# %%
+# ==============================================================================
 # MAIN ENTRYPOINT
 # ==============================================================================
 def main():
-    parser = argparse.ArgumentParser(description="Stage 2c Route A Response Generation")
+    parser = argparse.ArgumentParser(description="Stage 2d Route A Response Generation")
     parser.add_argument(
         "--mode",
-        choices=["plumbing", "full"],
+        choices=["plumbing", "full", "export_sample"],
         default="plumbing",
-        help="Execution mode: plumbing (local verification) or full (Colab batch execution)",
+        help="Execution mode: plumbing (local verification), full (Colab batch execution), or export_sample",
+    )
+    parser.add_argument(
+        "--responses-file",
+        type=str,
+        default="outputs/stage2/route_a_smoke_test.jsonl",
+        help="Path to responses JSONL to sample from",
+    )
+    parser.add_argument(
+        "--export-output",
+        type=str,
+        default="outputs/stage2/response_label_sample.csv",
+        help="Output CSV path for label sample",
+    )
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=100,
+        help="Number of samples to export",
     )
     args = parser.parse_args()
     CONFIG["execution_mode"] = args.mode
     
+    if args.mode == "export_sample":
+        export_response_label_sample(
+            responses_path=args.responses_file,
+            output_path=args.export_output,
+            sample_size=args.sample_size,
+            seed=CONFIG["seed"],
+        )
+        return
+        
     data = load_all_dev_dataset(CONFIG)
     
     if CONFIG["execution_mode"] == "plumbing":
         run_plumbing_test(data, CONFIG)
     elif CONFIG["execution_mode"] == "full":
-        print_run_header(CONFIG, CONFIG["target_model_id"], CONFIG["target_model_revision"])
         session = ModelSession(CONFIG["target_model_id"], CONFIG["target_model_revision"], CONFIG).load()
+        print_run_header(CONFIG, CONFIG["target_model_id"], CONFIG["target_model_revision"], session.commit_hash)
         en_cache = {}
         try:
             run_batched_generation_loop(

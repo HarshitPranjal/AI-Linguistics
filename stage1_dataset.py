@@ -209,7 +209,7 @@ LOANWORD_BASE = {
     "केबल": "cable", "लाइन": "line", "पाइप": "pipe", "ट्यूब": "tube",
     "टैंक": "tank", "सिलेंडर": "cylinder", "बैटरी": "battery", "सेल": "cell",
     "चार्ज": "charge", "चार्जर": "charger", "प्लग": "plug", "सॉकेट": "socket",
-    "स्विच": "switch", "बटन": "button", "की": "key", "लॉक": "lock",
+    "स्विच": "switch", "बटन": "button", "लॉक": "lock",
     "डोर": "door", "विंडो": "window", "गेट": "gate", "वॉल": "wall",
     "फ्लोर": "floor", "रूफ": "roof", "सीलिंग": "ceiling", "स्टेयर": "stair",
     "लिफ्ट": "lift", "एलिवेटर": "elevator", "एस्केलेटर": "escalator", "फर्नीचर": "furniture",
