@@ -685,10 +685,17 @@ def build_alignment_based_hinglish_bands(
         "bands": bands_dict
     }
 
-def run_stage1_pipeline():
+def run_stage1_pipeline(output_dir: str = None, dataset_path: str = None):
     print("=" * 70)
     print("RUNNING STAGE 1 REPRODUCIBLE PIPELINE (STAGE 1 CLOSE-OUT 5)")
     print("=" * 70)
+    
+    out_dir = output_dir if output_dir else OUTPUT_DIR
+    audit_dir = os.path.join(out_dir, "audit") if output_dir else os.path.join(OUTPUT_DIR, "audit")
+    target_dataset_path = dataset_path if dataset_path else (os.path.join(out_dir, "dataset.jsonl") if output_dir else DATASET_PATH)
+    AUDIT_DIR = audit_dir
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(audit_dir, exist_ok=True)
     
     # 1. Load manifest v3
     with open(MANIFEST_V3_PATH, "r", encoding="utf-8") as f:
@@ -704,7 +711,8 @@ def run_stage1_pipeline():
     # 3. Extract canonical en, hi, bho texts
     # Canonical texts are stored persistently in nllb_translations cache or dataset
     existing_texts = defaultdict(dict)
-    with open(DATASET_PATH, "r", encoding="utf-8") as f:
+    src_dataset_path = DATASET_PATH if os.path.exists(DATASET_PATH) else "/Users/harshitpranjal/AI Linguistic Vitality/outputs/stage1/dataset.jsonl"
+    with open(src_dataset_path, "r", encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
             existing_texts[r["seed_id"]][r["lang"]] = r["text"]
@@ -1050,11 +1058,8 @@ def run_stage1_pipeline():
     pd.DataFrame(hand_fix_p1_hi).to_csv(proposals_csv_path, index=False)
     print(f"Exported {len(hand_fix_p1_hi)} P1 hand fix proposals (hi proposals + bho marked 'needs native translation') to: {proposals_csv_path}")
     
-    # 9. Rebuild and Export dataset.jsonl (6,083 rows: 553 seeds x 11 variants)
-    print("[8] Assembling and Writing dataset.jsonl (6,083 rows)...")
-    deprecated_path = os.path.join(CACHE_DIR, "deprecated_synthetic_rows.json")
-    with open(deprecated_path, "r", encoding="utf-8") as f:
-        deprecated_map = json.load(f)
+    # 9. Rebuild and Export dataset.jsonl (4,424 rows: 553 seeds x 8 variants)
+    print("[8] Assembling and Writing dataset.jsonl (4,424 rows)...")
     
     new_dataset_records = []
     for idx, sid in enumerate(sid_order):
@@ -1075,15 +1080,26 @@ def run_stage1_pipeline():
             "split": meta["split"],
             "translation_method": "mt"
         }
+
+        def make_qc(cosine: float, length_ratio: float, is_passed: bool, direct: float, bt: float) -> Dict[str, Any]:
+            return {
+                "labse_cosine": cosine,
+                "length_ratio": length_ratio,
+                "is_qc_passed": is_passed,
+                "labse_direct": direct,
+                "labse_bt": bt
+            }
         
         # 1. EN
+        lr_en = round(len(en_txt) / max(1, len(en_txt)), 3)
         new_dataset_records.append({
             **base_rec,
             "id": f"{sid}_en",
             "lang": "en",
             "text": en_txt,
             "cmi": 0.0,
-            "qc_scores": {"labse_direct": 1.0, "labse_bt": 1.0, "labse_cosine": 1.0, "length_ratio": 1.0, "is_qc_passed": True}
+            "status": "ACTIVE",
+            "qc_scores": make_qc(1.0, lr_en, True, 1.0, 1.0)
         })
         
         # 2. HI
@@ -1096,7 +1112,8 @@ def run_stage1_pipeline():
             "lang": "hi",
             "text": hi_txt,
             "cmi": 0.0,
-            "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_hi, "is_qc_passed": (c_hi_qc >= 0.70)}
+            "status": "ACTIVE",
+            "qc_scores": make_qc(c_hi_qc, lr_hi, (c_hi_qc >= 0.70), c_hi_dir_qc, c_hi_qc)
         })
         
         # 3. Hinglish Translit (Primary Colloquial Scheme)
@@ -1112,7 +1129,7 @@ def run_stage1_pipeline():
             "variant_valid": True,
             "status": "ACTIVE",
             "variant_method": "natural_romanization_colloquial",
-            "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_tr, "is_qc_passed": True}
+            "qc_scores": make_qc(c_hi_qc, lr_tr, True, c_hi_dir_qc, c_hi_qc)
         })
         
         # 3b. Hinglish Translit Formal (Baseline / Stage 6 Ablation Scheme)
@@ -1128,29 +1145,10 @@ def run_stage1_pipeline():
             "variant_valid": True,
             "status": "ACTIVE",
             "variant_method": "natural_romanization_formal",
-            "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_tr_f, "is_qc_passed": True}
+            "qc_scores": make_qc(c_hi_qc, lr_tr_f, True, c_hi_dir_qc, c_hi_qc)
         })
         
-        # 4. Old Deprecated Rows (variant_valid: false)
-        for b_name in ["low", "mid", "high"]:
-            dep_key = f"{sid}_hinglish_mixed_{b_name}"
-            dep_item = deprecated_map.get(dep_key, {})
-            new_dataset_records.append({
-                **base_rec,
-                "id": f"{sid}_hinglish_mixed_{b_name}_deprecated",
-                "lang": f"hinglish_mixed_{b_name}",
-                "text": dep_item.get("text", ""),
-                "cmi": dep_item.get("cmi", 0.0),
-                "cmi_measured": dep_item.get("cmi_measured", 0.0),
-                "target_band": b_name,
-                "band_feasible": dep_item.get("band_feasible", False),
-                "variant_valid": False,
-                "status": "DEPRECATED",
-                "variant_method": "synthetic_lexical_substitution_deprecated",
-                "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": 1.0, "is_qc_passed": True}
-            })
-            
-        # 5. New Alignment-Based Rows (variant_valid: true)
+        # 4. New Alignment-Based Rows (variant_valid: true)
         for b_name in ["low", "mid", "high"]:
             binfo = bands[b_name]
             lr_b = round(len(binfo["text"]) / max(1, len(en_txt)), 3)
@@ -1169,10 +1167,10 @@ def run_stage1_pipeline():
                 "total_words": binfo["total_words"],
                 "provenance": binfo["provenance"],
                 "variant_method": "alignment_based_substitution",
-                "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_b, "is_qc_passed": True}
+                "qc_scores": make_qc(c_hi_qc, lr_b, True, c_hi_dir_qc, c_hi_qc)
             })
             
-        # 6. BHO
+        # 5. BHO
         c_bho_qc = round(float(cos_bho[idx]), 3)
         c_bho_dir_qc = round(float(cos_bho_dir[idx]), 3)
         lr_bho = round(len(bho_txt) / max(1, len(en_txt)), 3)
@@ -1182,13 +1180,23 @@ def run_stage1_pipeline():
             "lang": "bho",
             "text": bho_txt,
             "cmi": 0.0,
-            "qc_scores": {"labse_direct": c_bho_dir_qc, "labse_bt": c_bho_qc, "labse_cosine": c_bho_qc, "length_ratio": lr_bho, "is_qc_passed": (c_bho_qc >= 0.70)}
+            "status": "ACTIVE",
+            "qc_scores": make_qc(c_bho_qc, lr_bho, (c_bho_qc >= 0.70), c_bho_dir_qc, c_bho_qc)
         })
         
-    with open(DATASET_PATH, "w", encoding="utf-8") as f:
+    # Uniqueness assertion on (seed_id, lang)
+    assert len(new_dataset_records) == 4424, f"Expected 4424 records, got {len(new_dataset_records)}"
+    seen_pairs = set()
+    for r in new_dataset_records:
+        pair = (r["seed_id"], r["lang"])
+        assert pair not in seen_pairs, f"Duplicate (seed_id, lang) detected: {pair}"
+        seen_pairs.add(pair)
+    assert len(seen_pairs) == 4424, f"Expected 4424 unique (seed_id, lang) pairs, got {len(seen_pairs)}"
+
+    with open(target_dataset_path, "w", encoding="utf-8") as f:
         for r in new_dataset_records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    print(f"Exported dataset.jsonl: {len(new_dataset_records)} records.")
+    print(f"Exported dataset.jsonl: {len(new_dataset_records)} records to {target_dataset_path}.")
     
     # 10. Regenerated 20-Pair Table (Strictly from dataset.jsonl by code)
     random.seed(SEED)
@@ -1234,7 +1242,7 @@ def run_stage1_pipeline():
     ]
     
     sha_map = {
-        "dataset.jsonl": get_sha256(DATASET_PATH),
+        "dataset.jsonl": get_sha256(target_dataset_path),
         "cache/nllb_translations.json": get_sha256(NLLB_TRANS_PATH),
         "cache/nllb_back_translations.json": get_sha256(NLLB_BACK_TRANS_PATH),
         "seed_split_manifest_v3.json": get_sha256(MANIFEST_V3_PATH),
@@ -1281,4 +1289,9 @@ def run_stage1_pipeline():
     print("\nSTAGE 1 PIPELINE EXECUTION COMPLETED SUCCESSFULLY!")
 
 if __name__ == "__main__":
-    run_stage1_pipeline()
+    import argparse
+    parser = argparse.ArgumentParser(description="Stage 1 Dataset Generation Pipeline")
+    parser.add_argument("--output-dir", default=None, help="Directory to output dataset and audit files")
+    parser.add_argument("--dataset-path", default=None, help="Explicit path for output dataset.jsonl")
+    args = parser.parse_args()
+    run_stage1_pipeline(output_dir=args.output_dir, dataset_path=args.dataset_path)

@@ -91,7 +91,7 @@ CONFIG = {
     
     # Input paths
     "dataset_path": "outputs/stage1/dataset.jsonl",
-    "expected_dataset_sha256": "84533fba81d8552f115d7a975c32274e57ff5eaef19e9abb47376e9b8ccfc182",
+    "expected_dataset_sha256": "e599106a208b75bb61f73c49874d61eb6ed8c4dd2931f840b347242ccc7bfcbf",
     "manifest_path": "outputs/stage1/seed_split_manifest_v3.json",
     "seed_review_path": "outputs/stage1/seed_review_v1.csv",
     "drift_candidates_path": "outputs/stage1/audit/drift_candidates.csv",
@@ -358,6 +358,13 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
     with open(config["dataset_path"], "r", encoding="utf-8") as f:
         all_rows = [json.loads(line) for line in f if line.strip()]
         
+    # Uniqueness assertion on (seed_id, lang)
+    seen_dataset_pairs = set()
+    for r in all_rows:
+        pair = (r["seed_id"], r["lang"])
+        assert pair not in seen_dataset_pairs, f"Duplicate (seed_id, lang) found in dataset: {pair}"
+        seen_dataset_pairs.add(pair)
+        
     hi_by_seed = {r["seed_id"]: r for r in all_rows if r.get("lang") == "hi"}
     latin_re = re.compile(r"[a-zA-Z]")
     hi_contains_latin_by_seed = defaultdict(bool)
@@ -396,6 +403,8 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
         sid = r["seed_id"]
         if sid not in dev_seed_meta or r.get("split") != "dev":
             continue
+        if r.get("status") != "ACTIVE":
+            continue
         if r.get("variant_valid", True) is False:
             continue
         variant = r.get("lang")
@@ -404,6 +413,7 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
             
         rec = {
             "seed_id": sid,
+            "lang": variant,
             "variant": variant,
             "source": r.get("source"),
             "category": r.get("category"),
@@ -633,13 +643,17 @@ def run_batched_generation_loop(
             for line in f:
                 if line.strip():
                     item = json.loads(line)
-                    k = (item["seed_id"], item["variant"], item["model"])
+                    lang = item.get("lang") or item.get("variant")
+                    model = item.get("model", session.model_id)
+                    k = (item["seed_id"], lang, model)
+                    if k in existing_keys:
+                        raise ValueError(f"Duplicate resumable key found in {output_path}: {k}")
                     existing_keys.add(k)
                     completed_records.append(item)
-                    if item["variant"] == "en":
+                    if lang == "en":
                         en_response_cache[item["seed_id"]] = item["response"]
 
-    pending = [r for r in records if (r["seed_id"], r["variant"], session.model_id) not in existing_keys]
+    pending = [r for r in records if (r["seed_id"], r.get("lang") or r.get("variant"), session.model_id) not in existing_keys]
     print(f"[Batched Pipeline] Total records: {len(records)} | Pre-existing: {len(existing_keys)} | To generate: {len(pending)}")
     if not pending:
         return completed_records
@@ -666,6 +680,7 @@ def run_batched_generation_loop(
             
             resp_tokens = re.findall(r"\w+", res["response"].lower())
             rep_rate = compute_repetition_rate(resp_tokens, n=4)
+            uniq_ratio = round(len(set(resp_tokens)) / max(1, len(resp_tokens)), 4)
             
             if r["variant"] == "en":
                 length_ratio = 1.0
@@ -676,6 +691,7 @@ def run_batched_generation_loop(
                 
             record_entry = {
                 "seed_id": r["seed_id"],
+                "lang": r.get("lang") or r.get("variant"),
                 "variant": r["variant"],
                 "model": session.model_id,
                 "model_commit_hash": getattr(session, "commit_hash", "unknown"),
@@ -700,6 +716,7 @@ def run_batched_generation_loop(
                 "lid_method": "script_and_bhojpuri_lexical_marker",
                 "length_ratio_vs_en": length_ratio,
                 "repetition_rate": rep_rate,
+                "unique_token_ratio": uniq_ratio,
                 "hi_contains_latin": r.get("hi_contains_latin", False),
                 "drift_tier": r.get("drift_tier", "none"),
                 "review_status": r.get("review_status", "unreviewed"),
@@ -759,8 +776,8 @@ def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
         print(
             f"  Seed: {r['seed_id']} | Var: {r['variant']} | "
             f"Tokens: {r['token_count']} | Finish: {r['finish_reason']} | "
-            f"Chars: {r['generated_chars']} | CPT: {r['chars_per_token']} | "
-            f"Class: {r['response_language_class']}"
+            f"Unique: {r.get('unique_token_ratio', 0.0)} | "
+            f"Rep: {r.get('repetition_rate', 0.0)}"
         )
     print("[Plumbing Test Status] PASS: Patched schema verified successfully.\n")
 
