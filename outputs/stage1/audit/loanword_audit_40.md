@@ -1,4 +1,6 @@
 # 40 RANDOM LOANWORD AUDIT PAIRS ACROSS ALL SEEDS (seed 42)
+> [!WARNING]
+> **STALE HISTORICAL ARTIFACT (PRE-COLLOQUIAL)**: This document is an unregenerated historical snapshot from Stage 1 Close-out 4 reflecting pre-colloquial formal transliteration. Active loanword audits are maintained in `loanword_replacements.csv` and `loanword_check_100.csv`.
 
 | # | Seed ID | Phonetic Translit Token | Authentic English Replacement | Similarity | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |

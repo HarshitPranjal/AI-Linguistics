@@ -89,11 +89,15 @@ def main():
         print(f"| `{r['model_id']}` | {r['component']} | {r['languages']} | {r['licence']} | **{r['status']}** |")
     
     print("\n" + "=" * 80)
-    print("ROUTE B HINGLISH SPEECH POLICY")
+    print("ROUTE B HINGLISH SPEECH OPTIONS (STATUS: UNDECIDED)")
     print("=" * 80)
-    print("Hinglish speech is explicitly DROPPED from Route B audio generation.")
-    print("Reason: Lack of verified single-model open-weight code-mixed TTS synthesizer on Hugging Face Hub.")
-    print("Scope: Route B speech generation and recognition focuses strictly on en, hi, and bho.")
+    print("| Option | Synthesis / Capture Approach | Model / Source ID | Licence | Feasibility Status | Notes |")
+    print("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    print("| 1. Native Recordings | Human speaker audio capture | Annotator protocol ($N=161$ dev) | Custom / Open | **FEASIBLE (Protocols required)** | Highest acoustic authenticity; zero synthetic artifact |")
+    print("| 2. Indic Parler-TTS | Open-weight Indic text-to-speech | `ai4bharat/indic-parler-tts` | Apache-2.0 | **UNVERIFIED** | Model card retrieved for Indic languages; Hinglish code-mixed checkpoint unverified |")
+    print("| 3. Coqui XTTS-v2 | Zero-shot voice cloning | `coqui/XTTS-v2` | CPML (Non-Commercial) | **UNVERIFIED** | Model card covers 17 languages; Hindi/Hinglish unsupported natively |")
+    print("| 4. Bilingual Stitching | Script-splitting & audio concatenation | `mms-tts-hin` + `mms-tts-eng` | CC-BY-NC 4.0 | **FEASIBLE (Acoustic boundary artifacts)** | Discontinuities at code-switching junctures |")
+    print("| 5. Monolithic Scope | Drop Hinglish speech; evaluate en, hi, bho | MMS & Whisper | CC-BY-NC / MIT | **FEASIBLE (Baseline recommendation)** | Methodologically cleanest baseline avoiding synthetic distortion |")
     print("\nVerification complete.")
 
 

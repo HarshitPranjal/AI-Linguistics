@@ -1,4 +1,7 @@
 # STAGE 1 CLOSE-OUT 3: SUPPLEMENTARY AUDIT & DEFERRED SECTIONS
+> [!WARNING]
+> **STALE HISTORICAL ARTIFACT (PRE-COLLOQUIAL)**: This document is an unregenerated historical snapshot from Stage 1 Close-out 3 reflecting pre-colloquial formal transliteration. Active primary transliterations are maintained in `outputs/stage1/dataset.jsonl`.
+
 **Multilingual and Code-Mixed LLM Safety Framework (Manifest v3)**
 
 ## ITEM 3 (REMAINDER): Synthetic Lexical Substitution Audit & Monotonicity Analysis

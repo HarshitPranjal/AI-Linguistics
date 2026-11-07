@@ -274,3 +274,4 @@ At an assumed rate of 1.2 seconds per step with gradient accumulation, total fin
 | `outputs/stage1/audit/mixed_samples.csv` | 27,708 | `294f751d459c1b3d126a607fb7d3a9d63eb8f4367a621e149c0764dd92b0c563` |
 | `outputs/stage1/audit/mixed_variant_report.md` | 3,141 | `b0e2d120d624fd448df5f363a55272c10a81ad9108e1f8de39e1b80aac2a9cbb` |
 | `outputs/stage1/audit/regenerated_20_pair_table.md` | 10,511 | `1ef2f0bef5079f704aa8ae65ee3e78b99b14e828f29ee41fb3b748c85f7830ce` |
+

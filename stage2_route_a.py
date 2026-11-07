@@ -91,6 +91,7 @@ CONFIG = {
     
     # Input paths
     "dataset_path": "outputs/stage1/dataset.jsonl",
+    "expected_dataset_sha256": "84533fba81d8552f115d7a975c32274e57ff5eaef19e9abb47376e9b8ccfc182",
     "manifest_path": "outputs/stage1/seed_split_manifest_v3.json",
     "seed_review_path": "outputs/stage1/seed_review_v1.csv",
     "drift_candidates_path": "outputs/stage1/audit/drift_candidates.csv",
@@ -189,6 +190,11 @@ def get_hardware_name() -> str:
 def print_run_header(config: Dict[str, Any], model_id: str, model_revision: str, model_commit_hash: Optional[str] = None):
     """Prints mandatory provenance run header."""
     dataset_sha = compute_file_sha256(config["dataset_path"])
+    expected_dataset_sha = config.get("expected_dataset_sha256")
+    if expected_dataset_sha:
+        assert dataset_sha == expected_dataset_sha, (
+            f"Dataset SHA mismatch! Expected {expected_dataset_sha}, got {dataset_sha}"
+        )
     script_sha = compute_file_sha256(__file__) if os.path.exists(__file__) else "interactive_session"
     hw_name = get_hardware_name()
     commit_str = model_commit_hash if model_commit_hash else "resolved_at_load"
@@ -196,7 +202,7 @@ def print_run_header(config: Dict[str, Any], model_id: str, model_revision: str,
     print("=" * 80)
     print("STAGE 2 RUN PROVENANCE HEADER")
     print("=" * 80)
-    print(f"Dataset SHA-256:       {dataset_sha}")
+    print(f"Dataset SHA-256:       {dataset_sha} (VERIFIED)")
     print(f"Script SHA-256:        {script_sha}")
     print(f"Model ID:              {model_id}")
     print(f"Model Revision:        {model_revision}")

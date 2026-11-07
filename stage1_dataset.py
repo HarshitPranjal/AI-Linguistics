@@ -929,15 +929,21 @@ def run_stage1_pipeline():
     
     sid_order = list(processed_seeds.keys())
     en_list = [processed_seeds[sid]["en_text"] for sid in sid_order]
+    hi_list = [processed_seeds[sid]["hi_text"] for sid in sid_order]
+    bho_list = [processed_seeds[sid]["bho_text"] for sid in sid_order]
     hi_bt_list = [back_trans_cache[f"{sid}_hi"] for sid in sid_order]
     bho_bt_list = [back_trans_cache[f"{sid}_bho"] for sid in sid_order]
     
     en_emb = labse_model.encode(en_list, batch_size=64, normalize_embeddings=True)
+    hi_emb = labse_model.encode(hi_list, batch_size=64, normalize_embeddings=True)
+    bho_emb = labse_model.encode(bho_list, batch_size=64, normalize_embeddings=True)
     hi_bt_emb = labse_model.encode(hi_bt_list, batch_size=64, normalize_embeddings=True)
     bho_bt_emb = labse_model.encode(bho_bt_list, batch_size=64, normalize_embeddings=True)
     
     cos_hi = (en_emb * hi_bt_emb).sum(axis=1)
     cos_bho = (en_emb * bho_bt_emb).sum(axis=1)
+    cos_hi_dir = (en_emb * hi_emb).sum(axis=1)
+    cos_bho_dir = (en_emb * bho_emb).sum(axis=1)
     
     drift_candidates = []
     hand_fix_p1_hi = []
@@ -1077,11 +1083,12 @@ def run_stage1_pipeline():
             "lang": "en",
             "text": en_txt,
             "cmi": 0.0,
-            "qc_scores": {"labse_cosine": 1.0, "length_ratio": 1.0, "is_qc_passed": True}
+            "qc_scores": {"labse_direct": 1.0, "labse_bt": 1.0, "labse_cosine": 1.0, "length_ratio": 1.0, "is_qc_passed": True}
         })
         
         # 2. HI
         c_hi_qc = round(float(cos_hi[idx]), 3)
+        c_hi_dir_qc = round(float(cos_hi_dir[idx]), 3)
         lr_hi = round(len(hi_txt) / max(1, len(en_txt)), 3)
         new_dataset_records.append({
             **base_rec,
@@ -1089,7 +1096,7 @@ def run_stage1_pipeline():
             "lang": "hi",
             "text": hi_txt,
             "cmi": 0.0,
-            "qc_scores": {"labse_cosine": c_hi_qc, "length_ratio": lr_hi, "is_qc_passed": (c_hi_qc >= 0.70)}
+            "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_hi, "is_qc_passed": (c_hi_qc >= 0.70)}
         })
         
         # 3. Hinglish Translit (Primary Colloquial Scheme)
@@ -1105,7 +1112,7 @@ def run_stage1_pipeline():
             "variant_valid": True,
             "status": "ACTIVE",
             "variant_method": "natural_romanization_colloquial",
-            "qc_scores": {"labse_cosine": c_hi_qc, "length_ratio": lr_tr, "is_qc_passed": True}
+            "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_tr, "is_qc_passed": True}
         })
         
         # 3b. Hinglish Translit Formal (Baseline / Stage 6 Ablation Scheme)
@@ -1121,7 +1128,7 @@ def run_stage1_pipeline():
             "variant_valid": True,
             "status": "ACTIVE",
             "variant_method": "natural_romanization_formal",
-            "qc_scores": {"labse_cosine": c_hi_qc, "length_ratio": lr_tr_f, "is_qc_passed": True}
+            "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_tr_f, "is_qc_passed": True}
         })
         
         # 4. Old Deprecated Rows (variant_valid: false)
@@ -1140,7 +1147,7 @@ def run_stage1_pipeline():
                 "variant_valid": False,
                 "status": "DEPRECATED",
                 "variant_method": "synthetic_lexical_substitution_deprecated",
-                "qc_scores": dep_item.get("qc_scores", {"labse_cosine": 0.8, "length_ratio": 1.0, "is_qc_passed": True})
+                "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": 1.0, "is_qc_passed": True}
             })
             
         # 5. New Alignment-Based Rows (variant_valid: true)
@@ -1162,11 +1169,12 @@ def run_stage1_pipeline():
                 "total_words": binfo["total_words"],
                 "provenance": binfo["provenance"],
                 "variant_method": "alignment_based_substitution",
-                "qc_scores": {"labse_cosine": c_hi_qc, "length_ratio": lr_b, "is_qc_passed": True}
+                "qc_scores": {"labse_direct": c_hi_dir_qc, "labse_bt": c_hi_qc, "labse_cosine": c_hi_qc, "length_ratio": lr_b, "is_qc_passed": True}
             })
             
         # 6. BHO
         c_bho_qc = round(float(cos_bho[idx]), 3)
+        c_bho_dir_qc = round(float(cos_bho_dir[idx]), 3)
         lr_bho = round(len(bho_txt) / max(1, len(en_txt)), 3)
         new_dataset_records.append({
             **base_rec,
@@ -1174,7 +1182,7 @@ def run_stage1_pipeline():
             "lang": "bho",
             "text": bho_txt,
             "cmi": 0.0,
-            "qc_scores": {"labse_cosine": c_bho_qc, "length_ratio": lr_bho, "is_qc_passed": (c_bho_qc >= 0.70)}
+            "qc_scores": {"labse_direct": c_bho_dir_qc, "labse_bt": c_bho_qc, "labse_cosine": c_bho_qc, "length_ratio": lr_bho, "is_qc_passed": (c_bho_qc >= 0.70)}
         })
         
     with open(DATASET_PATH, "w", encoding="utf-8") as f:
