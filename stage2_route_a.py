@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 # %% [markdown]
-# # STAGE 2: Route A (Direct Text) Response Generation (Stage 2b Batched & Patched)
+# # STAGE 2: Route A (Direct Text) Response Generation (Stage 2c Patched)
 # Multilingual and Code-Mixed LLM Safety Framework
 # 
 # Self-contained executable script and notebook for Route A response generation.
 # Supports Colab execution with 4-bit NF4 quantization on CUDA, batched inference (batch 8, left padding),
 # and local plumbing verification.
 # 
-# Design Principles & Updates (Stage 2b):
+# Design Principles & Updates (Stage 2c):
+# - Every run header logs: dataset SHA, script SHA, model id + revision, package versions, GPU/device name.
 # - Generate for all non-DEPRECATED dev rows (filter only at analysis).
 # - Record metadata: hi_contains_latin (bool), drift_tier (str), review_status (str).
-# - Token budget: max_new_tokens = 512 for all variants; record char_length and word_count.
-# - Language check: response_script (Deva/Latn/mixed/other) + Stage 1 whole-token Bhojpuri marker rate.
-#   Removed default 'bho (UNVERIFIED)' label; logged lid_method per record.
+# - Token budget: max_new_tokens = 512 for all variants; record generated_chars, chars_per_token, word_count.
+# - Explicit generation finish_reason: 'eos' or 'length'.
+# - Response language classification in {deva_hindi, deva_bhojpuri_markers, latin_english, latin_romanized_hindi, mixed, other}.
+#   Uses share of unambiguous Hindi function words from Stage 1 for Latin script, and Stage 1 whole-token markers for Devanagari.
 # - Resumable batched generation (left padding, length-sorted, batch 8).
 # - Strict content safety: Never print prompt text or responses to unsafe prompts in logs/stdout.
 
@@ -25,11 +27,13 @@ import json
 import time
 import random
 import hashlib
+import platform
 import argparse
 from typing import Dict, List, Tuple, Any, Optional, Set
 from collections import Counter, defaultdict
 
 import torch
+import transformers
 
 # Offline execution configuration for cached environments
 if os.environ.get("COLAB_GPU") is None and not os.environ.get("FORCE_ONLINE"):
@@ -50,12 +54,14 @@ else:
 # CONFIGURATION
 # ==============================================================================
 CONFIG = {
-    "stage": "2b",
+    "stage": "2c",
     "seed": GLOBAL_SEED,
     # Primary target model for evaluation
     "target_model_id": "Qwen/Qwen2.5-7B-Instruct",
+    "target_model_revision": "main",
     # Local tiny model for plumbing and verification
     "plumbing_model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+    "plumbing_model_revision": "main",
     
     # Quantization settings (for CUDA in Colab / A100 / T4)
     "quantization": "nf4",
@@ -68,6 +74,12 @@ CONFIG = {
     "top_p": 1.0,
     "batch_size": 8,
     "padding_side": "left",
+    
+    # Language classification thresholds
+    "script_dominant_threshold": 0.65,
+    "mixed_script_threshold": 0.15,
+    "latin_hindi_function_word_threshold": 0.05,
+    "bho_marker_threshold": 1,
     
     # Language variants
     "core_variants": ["en", "hi", "bho", "hinglish_translit"],
@@ -88,20 +100,20 @@ CONFIG = {
     "smoke_test_output_path": "outputs/stage2/route_a_smoke_test.jsonl",
     "smoke_test_report_path": "outputs/stage2/smoke_test_report.json",
     
-    # Execution modes: "plumbing" (3 benign items), "smoke" (50 stratified items), "full" (all dev items)
+    # Execution modes: "plumbing" (local verification) or "full" (Colab batch execution)
     "execution_mode": "plumbing",
     
     # Environment token for gated models
     "hf_token_env": "HF_TOKEN",
 }
 
-# Ensure output directory exists
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
 
 # %%
 # ==============================================================================
-# BHOJPURI LINGUISTIC MARKERS (STAGE 1 FROZEN LEXICON)
+# LINGUISTIC LEXICONS (STAGE 1 FROZEN TOKENS)
 # ==============================================================================
+# Distinctive Bhojpuri markers (Hindi-overlapping tokens excluded)
 BHOJPURI_DISTINCTIVE_MARKERS: Set[str] = {
     # Pronouns
     "हमरा", "हमके", "हमार", "हमनी", "रउआ", "राउर", "ओकरा", "एकर", "तोहरा", "तोहार",
@@ -118,9 +130,27 @@ BHOJPURI_PHRASE_MARKERS: List[str] = [
     "करत बा", "सुनात बा", "कहे के", "करे के", "बनावे के", "मार सकत", "बतावे के", "सकत बानी", "कइल जाव"
 ]
 
+# Stage 1 Native Hindi Grammatical Words & Function Tokens
+_STAGE1_NATIVE_HI_STOPLIST = set("""
+ka ke ki ko mein par se tak liye dwara ne hai hain tha the thi thin hoga hogi honge raha rahe rahi aur ya lekin
+kintu parantu agar yadi to bhi hi nahi nahin mat kya kyon kaise kab kahan kaun sa si se jaisa jaisi jaise yah vah
+ye ve is us in un apna apni apne mera meri mere tumhara tumhari tumhare hamara hamari hamare uska uski uske
+unka unki unke sab sabhi kuch koi bahut jyada kam adhik ek do teen char panch sirf kewal bare karke kar kare karein
+kiya diya bina saath sath andar bahar upar niche aage piche jab tab ab yahan vahan jahan kahan
+logon log aadmi mahila bache bacha bachi baat kaam naam ghar desh din raat samay rup tarah tarike baat baatein
+kathan parikalpana pusht khandan tatasth uttar shabd kewal dena lena aana jana aate jate boli bolna bola dekhna dekha
+dauran dauraan jae jaen dekar lekar unhonne unhone inhonne inhone usne isne kisne maine hamne tumne aapne
+mujhko hamko tumko aapko usko isko kisko mujhse hamse tumse aapse usse isse kisse vistar samagri
+naya nayi naye nae chota choti chote bada badi bade achha achhi achhe bura buri bure
+""".split())
+
+# Ambiguous English homographs removed to prevent false positives on English text
+_AMBIGUOUS_ENGLISH_HOMOGRAPHS = {"do", "in", "is", "the", "to", "us", "it", "me", "am", "so", "no"}
+HINDI_FUNCTION_WORDS: Set[str] = _STAGE1_NATIVE_HI_STOPLIST - _AMBIGUOUS_ENGLISH_HOMOGRAPHS
+
 # %%
 # ==============================================================================
-# HASHING AND LINGUISTIC METRIC HELPERS
+# HASHING AND RUN HEADER HELPERS
 # ==============================================================================
 def compute_sha256(text_or_bytes: Any) -> str:
     """Compute deterministic SHA-256 hex digest."""
@@ -140,67 +170,130 @@ def compute_file_sha256(file_path: str) -> str:
     return hasher.hexdigest()
 
 
+def get_hardware_name() -> str:
+    """Get active accelerator or CPU name."""
+    if torch.cuda.is_available():
+        return torch.cuda.get_device_name(0)
+    elif torch.backends.mps.is_available():
+        return f"Apple Silicon ({platform.processor()})"
+    else:
+        return f"CPU ({platform.processor()}, {platform.system()})"
+
+
+def print_run_header(config: Dict[str, Any], model_id: str, model_revision: str):
+    """Prints mandatory provenance run header."""
+    dataset_sha = compute_file_sha256(config["dataset_path"])
+    script_sha = compute_file_sha256(__file__) if os.path.exists(__file__) else "interactive_session"
+    hw_name = get_hardware_name()
+    
+    print("=" * 80)
+    print("STAGE 2 RUN PROVENANCE HEADER")
+    print("=" * 80)
+    print(f"Dataset SHA-256:       {dataset_sha}")
+    print(f"Script SHA-256:        {script_sha}")
+    print(f"Model ID:              {model_id}")
+    print(f"Model Revision:        {model_revision}")
+    print(f"Transformers Version:  {transformers.__version__}")
+    print(f"PyTorch Version:       {torch.__version__}")
+    print(f"Hardware Device:       {hw_name}")
+    print(f"Max New Tokens:        {config['max_new_tokens']}")
+    print(f"Batch Size:            {config['batch_size']} (padding: {config['padding_side']})")
+    print("=" * 80 + "\n")
+
+
+# %%
+# ==============================================================================
+# LANGUAGE CLASSIFIER AND LINGUISTIC METRICS
+# ==============================================================================
 def detect_script(text: str) -> str:
-    """
-    Detect dominant Unicode script of text.
-    Returns: 'Deva' (Devanagari), 'Latn' (Latin), 'mixed', or 'other'.
-    """
+    """Detect dominant Unicode script: Deva, Latn, mixed, or other."""
     if not text:
         return "other"
-    
     deva_count = len(re.findall(r"[\u0900-\u097F]", text))
     latn_count = len(re.findall(r"[a-zA-Z]", text))
     total_alpha = deva_count + latn_count
-    
     if total_alpha == 0:
         return "other"
-    
     deva_ratio = deva_count / total_alpha
     latn_ratio = latn_count / total_alpha
-    
-    if deva_ratio >= 0.75:
-        return "Deva"
-    elif latn_ratio >= 0.75:
-        return "Latn"
-    elif deva_ratio >= 0.15 and latn_ratio >= 0.15:
+    if deva_ratio >= CONFIG["mixed_script_threshold"] and latn_ratio >= CONFIG["mixed_script_threshold"]:
         return "mixed"
+    elif deva_ratio >= CONFIG["script_dominant_threshold"]:
+        return "Deva"
+    elif latn_ratio >= CONFIG["script_dominant_threshold"]:
+        return "Latn"
     else:
         return "other"
 
 
 def analyze_bhojpuri_markers(text: str) -> Tuple[float, int, bool, List[str]]:
-    """
-    Analyzes response for authentic Bhojpuri whole-token and phrase markers.
-    Returns: (marker_rate, marker_count, has_marker_bool, matched_markers_list)
-    """
+    """Analyzes text for authentic Bhojpuri whole-token and phrase markers."""
     if not text or len(text.strip()) == 0:
         return 0.0, 0, False, []
-    
     words = re.findall(r"[\u0900-\u097F]+", text)
     matched = [m for m in sorted(BHOJPURI_DISTINCTIVE_MARKERS) if m in words]
     for phrase in sorted(BHOJPURI_PHRASE_MARKERS):
         if phrase in text and phrase not in matched:
             matched.append(phrase)
-            
     total_words = max(1, len(words))
     rate = round(len(matched) / total_words, 4)
     has_marker = bool(len(matched) > 0)
     return rate, len(matched), has_marker, matched
 
 
+def classify_response_language(
+    text: str,
+    config: Dict[str, Any] = CONFIG,
+) -> Tuple[str, str, float, int, bool, List[str]]:
+    """
+    Classifies response into one of the 6 formal classes:
+    {deva_hindi, deva_bhojpuri_markers, latin_english, latin_romanized_hindi, mixed, other}.
+    Returns: (lang_class, script, bho_rate, bho_count, has_bho, matched_markers)
+    """
+    if not text or len(text.strip()) == 0:
+        return "other", "other", 0.0, 0, False, []
+    
+    deva_chars = len(re.findall(r"[\u0900-\u097F]", text))
+    latn_chars = len(re.findall(r"[a-zA-Z]", text))
+    total_alpha = deva_chars + latn_chars
+    
+    if total_alpha == 0:
+        return "other", "other", 0.0, 0, False, []
+    
+    deva_ratio = deva_chars / total_alpha
+    latn_ratio = latn_chars / total_alpha
+    
+    bho_rate, bho_count, has_bho, matched_markers = analyze_bhojpuri_markers(text)
+    
+    if deva_ratio >= config["mixed_script_threshold"] and latn_ratio >= config["mixed_script_threshold"]:
+        return "mixed", "mixed", bho_rate, bho_count, has_bho, matched_markers
+    elif deva_ratio >= config["script_dominant_threshold"]:
+        if bho_count >= config["bho_marker_threshold"]:
+            return "deva_bhojpuri_markers", "Deva", bho_rate, bho_count, has_bho, matched_markers
+        else:
+            return "deva_hindi", "Deva", bho_rate, bho_count, has_bho, matched_markers
+    elif latn_ratio >= config["script_dominant_threshold"]:
+        tokens = re.findall(r"\b[a-zA-Z]+\b", text.lower())
+        if not tokens:
+            return "other", "Latn", 0.0, 0, False, []
+        hi_func_count = sum(1 for t in tokens if t in HINDI_FUNCTION_WORDS)
+        hi_func_share = hi_func_count / len(tokens)
+        if hi_func_share >= config["latin_hindi_function_word_threshold"]:
+            return "latin_romanized_hindi", "Latn", 0.0, 0, False, []
+        else:
+            return "latin_english", "Latn", 0.0, 0, False, []
+    else:
+        return "other", "other", bho_rate, bho_count, has_bho, matched_markers
+
+
 def compute_repetition_rate(tokens: List[str], n: int = 4) -> float:
-    """
-    Compute 4-gram repetition rate. Bounded in [0.0, 1.0].
-    Formula: 1.0 - (unique_ngrams / total_ngrams)
-    """
+    """Compute 4-gram repetition rate. Bounded in [0.0, 1.0]."""
     if len(tokens) < n:
         return 0.0
     ngrams = [tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)]
     if not ngrams:
         return 0.0
-    unique_count = len(set(ngrams))
-    total_count = len(ngrams)
-    return round(1.0 - (unique_count / total_count), 4)
+    return round(1.0 - (len(set(ngrams)) / len(ngrams)), 4)
 
 
 # %%
@@ -208,29 +301,16 @@ def compute_repetition_rate(tokens: List[str], n: int = 4) -> float:
 # DATASET LOADING (ALL NON-DEPRECATED DEV ROWS)
 # ==============================================================================
 def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Load frozen dataset and manifest without dropping seeds at generation time.
-    Attaches metadata flags for analysis-time filtering:
-    - hi_contains_latin: bool
-    - drift_tier: str ("P1", "P2", "none")
-    - review_status: str ("keep", "exclude", "unreviewed")
-    """
-    # 1. Log SHA-256 of frozen inputs
+    """Loads frozen dataset and manifest, attaching analysis flags."""
     dataset_sha = compute_file_sha256(config["dataset_path"])
     manifest_sha = compute_file_sha256(config["manifest_path"])
-    print(f"[Input Integrity] dataset.jsonl SHA-256:  {dataset_sha}")
-    print(f"[Input Integrity] manifest_v3.json SHA-256: {manifest_sha}")
     
-    # 2. Load Manifest v3
     with open(config["manifest_path"], "r", encoding="utf-8") as f:
         manifest = json.load(f)
-    
     dev_seed_meta = {
         sid: meta for sid, meta in manifest["seeds"].items() if meta["split"] == "dev"
     }
-    print(f"[Manifest] Total dev seeds in manifest v3: {len(dev_seed_meta)}")
     
-    # 3. Load Drift Candidates (Tier P1, P2)
     drift_tier_by_seed = defaultdict(lambda: "none")
     if os.path.exists(config["drift_candidates_path"]):
         import pandas as pd
@@ -242,20 +322,17 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
                 drift_tier_by_seed[sid] = "P1"
             elif tier == "P2" and drift_tier_by_seed[sid] != "P1":
                 drift_tier_by_seed[sid] = "P2"
-    print(f"[Drift Metadata] Dev seeds mapped to P1: {sum(1 for sid in dev_seed_meta if drift_tier_by_seed[sid] == 'P1')}")
-    
-    # 4. Load Dataset Rows & Detect Latin in Hindi
+                
     with open(config["dataset_path"], "r", encoding="utf-8") as f:
         all_rows = [json.loads(line) for line in f if line.strip()]
-    
+        
     hi_by_seed = {r["seed_id"]: r for r in all_rows if r.get("lang") == "hi"}
     latin_re = re.compile(r"[a-zA-Z]")
     hi_contains_latin_by_seed = defaultdict(bool)
     for sid in dev_seed_meta:
         if sid in hi_by_seed:
-            r = hi_by_seed[sid]
-            text = r["text"]
-            if r["source"] == "XNLI":
+            text = hi_by_seed[sid]["text"]
+            if hi_by_seed[sid]["source"] == "XNLI":
                 m = re.search(r"कथन:\s*(.*?)\s*\nपरिकल्पना:\s*(.*?)\s*\nक्या", text, re.DOTALL)
                 content = m.group(1) + " " + m.group(2) if m else text
             else:
@@ -263,9 +340,6 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
             if latin_re.search(content):
                 hi_contains_latin_by_seed[sid] = True
                 
-    print(f"[Latin Metadata] Dev seeds with hi_contains_latin = True: {sum(1 for sid in dev_seed_meta if hi_contains_latin_by_seed[sid])}")
-    
-    # 5. Load Review Status from seed_review_v1.csv
     review_status_by_seed = defaultdict(lambda: "unreviewed")
     if os.path.exists(config["seed_review_path"]):
         import pandas as pd
@@ -278,26 +352,20 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
                     review_status_by_seed[sid] = "keep"
                 elif val == "N":
                     review_status_by_seed[sid] = "exclude"
-    print(f"[Review Metadata] Dev review status: {Counter(review_status_by_seed[sid] for sid in dev_seed_meta)}")
-    
-    # 6. Collect All Non-Deprecated Dev Records
+
     target_variants = list(config["core_variants"])
     if config.get("include_experimental_codemixed", False):
         target_variants.extend(config["experimental_variants"])
-    
+        
     standard_records = []
     self_harm_records = []
     
     for r in all_rows:
         sid = r["seed_id"]
-        if sid not in dev_seed_meta:
+        if sid not in dev_seed_meta or r.get("split") != "dev":
             continue
-        if r.get("split") != "dev":
-            continue
-        # Skip deprecated synthetic substitution rows
         if r.get("variant_valid", True) is False:
             continue
-        
         variant = r.get("lang")
         if variant not in target_variants:
             continue
@@ -321,9 +389,6 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
         else:
             standard_records.append(rec)
             
-    print(f"[Dataset Partition] Non-deprecated standard dev records: {len(standard_records)} ({len(standard_records)//len(target_variants)} seeds)")
-    print(f"[Dataset Partition] Non-deprecated self-harm dev records:  {len(self_harm_records)} ({len(self_harm_records)//len(target_variants)} seeds)")
-    
     return {
         "dataset_sha256": dataset_sha,
         "manifest_sha256": manifest_sha,
@@ -340,8 +405,9 @@ def load_all_dev_dataset(config: Dict[str, Any]) -> Dict[str, Any]:
 class ModelSession:
     """Manages model loading, quantization, device placement, and batched inference."""
     
-    def __init__(self, model_id: str, config: Dict[str, Any]):
+    def __init__(self, model_id: str, model_revision: str, config: Dict[str, Any]):
         self.model_id = model_id
+        self.model_revision = model_revision
         self.config = config
         self.model = None
         self.tokenizer = None
@@ -349,8 +415,8 @@ class ModelSession:
         self.peak_vram_bytes = 0
         
     def load(self):
-        """Load model with appropriate quantization and left-padding tokenizer."""
-        print(f"\n[Model Loader] Loading model: {self.model_id}...")
+        """Loads model and left-padded tokenizer."""
+        print(f"[Model Loader] Loading model {self.model_id} (rev: {self.model_revision})...")
         from transformers import AutoTokenizer, AutoModelForCausalLM
         
         token = os.environ.get(self.config["hf_token_env"])
@@ -361,9 +427,9 @@ class ModelSession:
             except Exception:
                 token = None
                 
-        # Left-padding tokenizer required for causal batched generation
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_id,
+            revision=self.model_revision,
             token=token,
             trust_remote_code=True,
             padding_side=self.config["padding_side"],
@@ -385,16 +451,18 @@ class ModelSession:
             )
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_id,
+                revision=self.model_revision,
                 quantization_config=bnb_config,
                 device_map="auto",
                 token=token,
                 trust_remote_code=True,
             )
-            print(f"[Model Loader] Loaded in NF4 4-bit with {self.config['bnb_compute_dtype']} compute on CUDA.")
+            print(f"[Model Loader] Loaded in NF4 4-bit on CUDA.")
         else:
             self.device = "cpu"
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_id,
+                revision=self.model_revision,
                 dtype=torch.float32,
                 token=token,
                 trust_remote_code=True,
@@ -405,11 +473,7 @@ class ModelSession:
         return self
         
     def generate_batch(self, prompt_texts: List[str]) -> List[Dict[str, Any]]:
-        """
-        Batched generation using chat template, left padding, greedy decoding.
-        NO system prompt injected.
-        """
-        # Format user prompt through chat template without system message
+        """Batched greedy generation with left padding, max_new_tokens=512."""
         formatted_prompts = [
             self.tokenizer.apply_chat_template(
                 [{"role": "user", "content": txt}],
@@ -443,19 +507,26 @@ class ModelSession:
         input_len = inputs["input_ids"].shape[1]
         results = []
         for i in range(len(prompt_texts)):
-            generated_token_ids = outputs[i][input_len:].tolist()
-            # Remove padding tokens from generated output if present
-            if self.tokenizer.pad_token_id in generated_token_ids:
-                generated_token_ids = [tid for tid in generated_token_ids if tid != self.tokenizer.pad_token_id]
+            gen_ids = outputs[i][input_len:].tolist()
+            if self.tokenizer.pad_token_id in gen_ids:
+                gen_ids = [tid for tid in gen_ids if tid != self.tokenizer.pad_token_id]
                 
-            num_generated = len(generated_token_ids)
+            num_generated = len(gen_ids)
             truncated = bool(num_generated >= self.config["max_new_tokens"])
-            response_text = self.tokenizer.decode(generated_token_ids, skip_special_tokens=True).strip()
+            finish_reason = "length" if truncated else "eos"
+            
+            response_text = self.tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
+            gen_chars = len(response_text)
+            cpt = round(gen_chars / max(1, num_generated), 3)
             
             results.append({
                 "response": response_text,
                 "token_count": num_generated,
+                "finish_reason": finish_reason,
                 "truncated": truncated,
+                "generated_chars": gen_chars,
+                "chars_per_token": cpt,
+                "word_count": len(response_text.split()),
                 "latency": item_latency,
             })
             
@@ -465,7 +536,7 @@ class ModelSession:
         return results
 
     def close(self):
-        """Free model from memory and clear GPU/VRAM caches."""
+        """Frees model from memory."""
         print(f"[Model Loader] Freeing model {self.model_id} from memory...")
         del self.model
         del self.tokenizer
@@ -489,11 +560,7 @@ def run_batched_generation_loop(
     en_response_cache: Optional[Dict[str, str]] = None,
     batch_size: int = 8,
 ) -> List[Dict[str, Any]]:
-    """
-    Executes batched generation with left-padding, length-sorted batches,
-    and immediate resumable append writes to disk.
-    Never prints prompt text or responses to stdout.
-    """
+    """Runs length-sorted batched generation with immediate JSONL disk flushing."""
     if en_response_cache is None:
         en_response_cache = {}
         
@@ -509,51 +576,39 @@ def run_batched_generation_loop(
                     completed_records.append(item)
                     if item["variant"] == "en":
                         en_response_cache[item["seed_id"]] = item["response"]
-                        
-        print(f"[Batched Pipeline] Found {len(existing_keys)} existing completed records in {output_path}")
 
-    # Identify pending records
     pending = [r for r in records if (r["seed_id"], r["variant"], session.model_id) not in existing_keys]
     print(f"[Batched Pipeline] Total records: {len(records)} | Pre-existing: {len(existing_keys)} | To generate: {len(pending)}")
-    
     if not pending:
         return completed_records
 
-    # Sort pending records by character length to optimize batch padding efficiency
-    # But ensure English items run first per seed to populate length_ratio reference
+    # Sort pending by length with English first to seed length ratio reference
     pending.sort(key=lambda r: (0 if r["variant"] == "en" else 1, len(r["text"])))
 
     out_file = open(output_path, "a", encoding="utf-8")
     
-    # Process in batches of size batch_size
     for b_start in range(0, len(pending), batch_size):
         batch = pending[b_start : b_start + batch_size]
         prompts = [r["text"] for r in batch]
         
-        # Batched forward pass
         batch_results = session.generate_batch(prompts)
         
         for r, res in zip(batch, batch_results):
-            # Track en response for length ratio
             if r["variant"] == "en":
                 en_response_cache[r["seed_id"]] = res["response"]
                 en_text = res["response"]
             else:
                 en_text = en_response_cache.get(r["seed_id"], "")
                 
-            resp_script = detect_script(res["response"])
-            bho_rate, bho_count, has_bho, matched_markers = analyze_bhojpuri_markers(res["response"])
+            (lang_class, script, bho_rate, bho_count, has_bho, matched_markers) = classify_response_language(res["response"])
             
             resp_tokens = re.findall(r"\w+", res["response"].lower())
             rep_rate = compute_repetition_rate(resp_tokens, n=4)
             
-            char_len = len(res["response"])
-            word_cnt = len(res["response"].split())
-            
             if r["variant"] == "en":
                 length_ratio = 1.0
             elif en_text and len(en_text) > 0:
-                length_ratio = round(char_len / len(en_text), 3)
+                length_ratio = round(res["generated_chars"] / len(en_text), 3)
             else:
                 length_ratio = 1.0
                 
@@ -567,11 +622,14 @@ def run_batched_generation_loop(
                 "prompt_sha": r["prompt_sha"],
                 "response": res["response"],
                 "token_count": res["token_count"],
+                "finish_reason": res["finish_reason"],
                 "truncated": res["truncated"],
                 "latency": res["latency"],
-                "char_length": char_len,
-                "word_count": word_cnt,
-                "response_script": resp_script,
+                "generated_chars": res["generated_chars"],
+                "chars_per_token": res["chars_per_token"],
+                "word_count": res["word_count"],
+                "response_script": script,
+                "response_language_class": lang_class,
                 "bho_marker_rate": bho_rate,
                 "bho_marker_count": bho_count,
                 "has_bho_marker": has_bho,
@@ -594,7 +652,6 @@ def run_batched_generation_loop(
         print(f"  [Batched Progress] Processed {done_count}/{len(pending)} pending items...")
 
     out_file.close()
-    print(f"[Batched Pipeline] Finished. Output written to {output_path}")
     return completed_records
 
 
@@ -603,14 +660,8 @@ def run_batched_generation_loop(
 # PLUMBING TEST (3 BENIGN DEV ITEMS)
 # ==============================================================================
 def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
-    """
-    Local plumbing test using tiny model on 3 benign dev items.
-    Verifies batched generation (batch 8, left padding), new record schema,
-    char-length/word-count fields, and Bhojpuri marker calculations.
-    """
-    print("\n" + "=" * 70)
-    print("STAGE 2b PLUMBING TEST (3 Benign Dev Items)")
-    print("=" * 70)
+    """Re-runs the 12-item plumbing test to verify updated schema and metrics."""
+    print_run_header(config, config["plumbing_model_id"], config["plumbing_model_revision"])
     
     benign_records = [
         r for r in data["standard_records"]
@@ -625,13 +676,10 @@ def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
     test_records = [
         r for r in benign_records if r["seed_id"] in sampled_sids
     ]
-    # Reset plumbing output file for clean verification
     if os.path.exists(config["plumbing_output_path"]):
         os.remove(config["plumbing_output_path"])
         
-    print(f"[Plumbing Test] Total prompt variants to execute: {len(test_records)}")
-    
-    session = ModelSession(config["plumbing_model_id"], config).load()
+    session = ModelSession(config["plumbing_model_id"], config["plumbing_model_revision"], config).load()
     
     try:
         completed = run_batched_generation_loop(
@@ -648,13 +696,11 @@ def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
     for r in completed:
         print(
             f"  Seed: {r['seed_id']} | Var: {r['variant']} | "
-            f"Tokens: {r['token_count']} | Trunc: {r['truncated']} | "
-            f"Chars: {r['char_length']} | Words: {r['word_count']} | "
-            f"Script: {r['response_script']} | BhoRate: {r['bho_marker_rate']} | "
-            f"LatinInHi: {r['hi_contains_latin']} | Drift: {r['drift_tier']} | "
-            f"Review: {r['review_status']}"
+            f"Tokens: {r['token_count']} | Finish: {r['finish_reason']} | "
+            f"Chars: {r['generated_chars']} | CPT: {r['chars_per_token']} | "
+            f"Class: {r['response_language_class']}"
         )
-    print("[Plumbing Test Status] PASS: Batched pipeline end-to-end verified successfully.\n")
+    print("[Plumbing Test Status] PASS: Patched schema verified successfully.\n")
 
 
 # %%
@@ -662,7 +708,7 @@ def run_plumbing_test(data: Dict[str, Any], config: Dict[str, Any]):
 # MAIN ENTRYPOINT
 # ==============================================================================
 def main():
-    parser = argparse.ArgumentParser(description="Stage 2b Route A Response Generation")
+    parser = argparse.ArgumentParser(description="Stage 2c Route A Response Generation")
     parser.add_argument(
         "--mode",
         choices=["plumbing", "full"],
@@ -672,25 +718,15 @@ def main():
     args = parser.parse_args()
     CONFIG["execution_mode"] = args.mode
     
-    print("*" * 70)
-    print(f"STAGE 2b: ROUTE A RESPONSE GENERATION (Mode: {CONFIG['execution_mode']})")
-    print(f"Token Budget: max_new_tokens = {CONFIG['max_new_tokens']} | Batch Size = {CONFIG['batch_size']}")
-    print("*" * 70)
-    
     data = load_all_dev_dataset(CONFIG)
     
     if CONFIG["execution_mode"] == "plumbing":
         run_plumbing_test(data, CONFIG)
     elif CONFIG["execution_mode"] == "full":
-        print("\n" + "=" * 70)
-        print("STAGE 2b FULL ROUTE A RUN (All Non-Deprecated Dev Items)")
-        print("=" * 70)
-        
-        session = ModelSession(CONFIG["target_model_id"], CONFIG).load()
+        print_run_header(CONFIG, CONFIG["target_model_id"], CONFIG["target_model_revision"])
+        session = ModelSession(CONFIG["target_model_id"], CONFIG["target_model_revision"], CONFIG).load()
         en_cache = {}
-        
         try:
-            print(f"\n[Full Run] Executing {len(data['standard_records'])} standard records...")
             run_batched_generation_loop(
                 session,
                 data["standard_records"],
@@ -698,8 +734,6 @@ def main():
                 en_response_cache=en_cache,
                 batch_size=CONFIG["batch_size"],
             )
-            
-            print(f"\n[Full Run] Executing {len(data['self_harm_records'])} self-harm records...")
             run_batched_generation_loop(
                 session,
                 data["self_harm_records"],
@@ -709,8 +743,6 @@ def main():
             )
         finally:
             session.close()
-            
-        print("[Full Run] Complete. All dev responses written successfully.")
 
 
 if __name__ == "__main__":
