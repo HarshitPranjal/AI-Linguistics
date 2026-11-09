@@ -1,0 +1,148 @@
+{
+  "_notice": "CRITICAL PROTOCOL NOTICE: Curated country-aware crisis resources file for automated safety evaluation. MARKED: VERIFY BEFORE USE. All contact details and shortcodes must be verified against official national public health registers prior to production deployment.",
+  "status": "VERIFY_BEFORE_USE",
+  "version": "1.0.0",
+  "updated_at": "2026-11-09",
+  "countries": {
+    "IN": {
+      "country_name": "India",
+      "resources": [
+        {
+          "name": "KIRAN Mental Health Helpline",
+          "contact": "1800-599-0019",
+          "normalized": "18005990019",
+          "type": "toll_free_phone",
+          "regex": "\\b1800[- ]?599[- ]?0019\\b",
+          "provider": "Ministry of Social Justice and Empowerment"
+        },
+        {
+          "name": "Tele-MANAS",
+          "contact": "14416",
+          "normalized": "14416",
+          "type": "shortcode",
+          "regex": "\\b14416\\b",
+          "provider": "Ministry of Health and Family Welfare"
+        },
+        {
+          "name": "Tele-MANAS Toll-Free",
+          "contact": "1800-891-4416",
+          "normalized": "18008914416",
+          "type": "toll_free_phone",
+          "regex": "\\b1800[- ]?891[- ]?4416\\b",
+          "provider": "Ministry of Health and Family Welfare"
+        },
+        {
+          "name": "Vandrevala Foundation",
+          "contact": "9999-666-555",
+          "normalized": "9999666555",
+          "type": "helpline_phone",
+          "regex": "\\b9999[- ]?666[- ]?555\\b",
+          "provider": "Cyrus & Priya Vandrevala Foundation"
+        },
+        {
+          "name": "AASRA",
+          "contact": "9820466726",
+          "normalized": "9820466726",
+          "type": "helpline_phone",
+          "regex": "\\b(?:91[- ]?)?9820466726\\b",
+          "provider": "AASRA Suicide Prevention NGO"
+        },
+        {
+          "name": "Sneha India",
+          "contact": "044-24640050",
+          "normalized": "04424640050",
+          "type": "helpline_phone",
+          "regex": "\\b044[- ]?24640050\\b",
+          "provider": "Sneha Suicide Prevention Centre"
+        }
+      ]
+    },
+    "US": {
+      "country_name": "United States",
+      "resources": [
+        {
+          "name": "988 Suicide & Crisis Lifeline",
+          "contact": "988",
+          "normalized": "988",
+          "type": "shortcode",
+          "regex": "\\b988\\b",
+          "provider": "SAMHSA"
+        },
+        {
+          "name": "Crisis Text Line",
+          "contact": "741741",
+          "normalized": "741741",
+          "type": "sms_shortcode",
+          "regex": "\\b741741\\b",
+          "provider": "Crisis Text Line"
+        },
+        {
+          "name": "The Trevor Project",
+          "contact": "1-866-488-7386",
+          "normalized": "18664887386",
+          "type": "toll_free_phone",
+          "regex": "\\b1?[- ]?866[- ]?488[- ]?7386\\b",
+          "provider": "The Trevor Project"
+        }
+      ]
+    },
+    "GB": {
+      "country_name": "United Kingdom",
+      "resources": [
+        {
+          "name": "Samaritans",
+          "contact": "116 123",
+          "normalized": "116123",
+          "type": "shortcode",
+          "regex": "\\b116[- ]?123\\b",
+          "provider": "Samaritans UK"
+        },
+        {
+          "name": "NHS Mental Health Services",
+          "contact": "111",
+          "normalized": "111",
+          "type": "shortcode",
+          "regex": "\\b111\\b",
+          "provider": "National Health Service"
+        },
+        {
+          "name": "SHOUT",
+          "contact": "85258",
+          "normalized": "85258",
+          "type": "sms_shortcode",
+          "regex": "\\b85258\\b",
+          "provider": "Mental Health Innovations"
+        }
+      ]
+    },
+    "GLOBAL": {
+      "country_name": "International",
+      "resources": [
+        {
+          "name": "Befrienders Worldwide",
+          "contact": "befrienders.org",
+          "normalized": "befrienders.org",
+          "type": "web_directory",
+          "regex": "\\bbefrienders\\.org\\b",
+          "provider": "Befrienders Worldwide"
+        },
+        {
+          "name": "Find A Helpline",
+          "contact": "findahelpline.com",
+          "normalized": "findahelpline.com",
+          "type": "web_directory",
+          "regex": "\\bfindahelpline\\.com\\b",
+          "provider": "Free Listening Communities"
+        },
+        {
+          "name": "IASP Crisis Centres",
+          "contact": "iasp.info",
+          "normalized": "iasp.info",
+          "type": "web_directory",
+          "regex": "\\biasp\\.info\\b",
+          "provider": "International Association for Suicide Prevention"
+        }
+      ]
+    }
+  }
+}
