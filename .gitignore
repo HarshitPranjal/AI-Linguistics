@@ -32,6 +32,7 @@ data/raw/
 # outputs/ tracked for reproducibility
 /reports/
 outputs/stage2/
+outputs/stage3/
 !outputs/reports/
 !outputs/reports/**
 
