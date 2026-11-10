@@ -125,9 +125,9 @@ EXPECTED_HASHES = {
     "outputs/stage1/dataset.jsonl": "e599106a208b75bb61f73c49874d61eb6ed8c4dd2931f840b347242ccc7bfcbf",
     "outputs/stage1/seed_split_manifest_v3.json": "2d781b131e94694f576b024533fbfa4cdb88980e50dabcf9496dceeb55e6ee0c",
     "outputs/stage1/seed_review_v1.csv": "03fe6b8c5b2a666fd7534883fb4aae7f55a359872189ef3a27976640138c2e8e",
-    "configs/s1_patterns.json": "804982d6b1849893088262de84aa6d61fbedd678ff03f4cef2ebf84ae0a4ee81",
+    "configs/s1_patterns.json": "87c93e274d3e641da0f18ca537704ba37893082b407ba87e295ef4a8e18c0dee",
     "configs/crisis_resources.json": "802aadea39764cebe32ec95d87334bd3cf7349a8f7e22c001c0376ad64ef580a",
-    "stage3_judge.py": "5ba46011943c100124f8002c2d0535e3b53dba50e3dba2dde20a5983c0aa05f7",
+    "stage3_judge.py": "89032788374b4e2c5f3696053bcf603a0e3dfe8e00068b7e5fc83c5dae7d8bb8",
 }
 
 print("\n--- Cryptographic Integrity Assertions ---")
