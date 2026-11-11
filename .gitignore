@@ -33,6 +33,7 @@ data/raw/
 /reports/
 outputs/stage2/
 outputs/stage3/
+outputs/stage4/
 !outputs/reports/
 !outputs/reports/**
 
