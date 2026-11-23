@@ -179,7 +179,7 @@ The supplied provenance anchors are listed below. Run the integrity checks again
 Clone the actual repository and install its dependencies. Replace the placeholder URL below with your repository URL:
 
 ```bash
-git clone https://github.com/your-org/ai-linguistic-vitality.git
+git clone https://github.com/HarshitPranjal/AI-Linguistics.git
 cd ai-linguistic-vitality
 pip install -r requirements.txt
 ```
